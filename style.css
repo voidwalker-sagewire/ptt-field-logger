@@ -1,0 +1,104 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #f5f5f5;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+h1 {
+  margin-bottom: 0;
+}
+
+.subtitle {
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+.card {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+button {
+  font-size: 20px;
+  padding: 14px;
+  width: 100%;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 0;
+}
+
+.smallBtn {
+  font-size: 16px;
+  width: auto;
+  padding: 10px 14px;
+  margin-right: 8px;
+}
+
+#connection,
+#recorderStatus {
+  margin: 12px 0;
+  opacity: 0.9;
+}
+
+#state {
+  font-size: 34px;
+  font-weight: bold;
+  text-align: center;
+  padding: 18px;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+.pressed {
+  background: #5b1f1f;
+}
+
+.released {
+  background: #1e3b24;
+}
+
+#timer {
+  text-align: center;
+  font-size: 42px;
+  font-family: monospace;
+}
+
+#vu {
+  width: 100%;
+  background: #050505;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+#audioPlayer {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.hint {
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+#rawLog, #sessionLog {
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 14px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.session {
+  border-bottom: 1px solid #444;
+  padding: 10px 0;
+}
