@@ -1,4 +1,4 @@
-const CACHE_NAME = "ptt-field-logger-v0.2.3";
+const CACHE_NAME = "ptt-field-logger-v0.3.0";
 
 self.addEventListener("install", event => {
   event.waitUntil(
