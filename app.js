@@ -1,10 +1,8 @@
-ptt-field-logger-v0.3.0const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.3.0";
 const BRIDGE_TRANSCRIBE_URL = "http://159.203.129.179:8787/transcribe";
+
 const SESSION_KEY = "pttFieldLogger.sessions.v0.3.0";
 const COUNTER_KEY = "pttFieldLogger.counter.v0.3.0";
-const DB_NAME = "ptt-field-logger-db";
-const DB_VERSION = 1;
-const AUDIO_STORE = "audioClips";
 
 let characteristic;
 let connectedDevice = null;
@@ -21,60 +19,34 @@ let vuAnimation = null;
 
 let mediaRecorder = null;
 let recordedChunks = [];
-let dbPromise = null;
 
 const connectBtn = document.getElementById("connectBtn");
-const micTestBtn = document.getElementById("micTestBtn");
-const manualStartBtn = document.getElementById("manualStartBtn");
-const manualStopBtn = document.getElementById("manualStopBtn");
 const exportBtn = document.getElementById("exportBtn");
 const clearBtn = document.getElementById("clearBtn");
+const manualStartBtn = document.getElementById("manualStartBtn");
+const manualStopBtn = document.getElementById("manualStopBtn");
+const micTestBtn = document.getElementById("micTestBtn");
 
-connectBtn.addEventListener("click", connect);
-micTestBtn.addEventListener("click", setupMicrophonePreview);
-manualStartBtn.addEventListener("click", () => startSession("manual"));
-manualStopBtn.addEventListener("click", () => endSession("manual_stop"));
-exportBtn.addEventListener("click", downloadLog);
-clearBtn.addEventListener("click", clearLog);
+if (connectBtn) connectBtn.addEventListener("click", connect);
+if (exportBtn) exportBtn.addEventListener("click", downloadLog);
+if (clearBtn) clearBtn.addEventListener("click", clearLog);
+if (manualStartBtn) manualStartBtn.addEventListener("click", startSession);
+if (manualStopBtn) manualStopBtn.addEventListener("click", () => endSession("manual_stop"));
+if (micTestBtn) micTestBtn.addEventListener("click", setupMicrophonePreview);
 
 function nowIso() {
   return new Date().toISOString();
 }
 
+function $(id) {
+  return document.getElementById(id);
+}
+
 function logRaw(msg) {
+  const rawLog = $("rawLog");
+  if (!rawLog) return;
   const time = new Date().toLocaleTimeString();
-  const rawLog = document.getElementById("rawLog");
   rawLog.textContent = `[${time}] ${msg}\n` + rawLog.textContent;
-}
-
-function setConnection(msg) {
-  document.getElementById("connection").textContent = msg;
-}
-
-function setState(pressed) {
-  const state = document.getElementById("state");
-  if (pressed) {
-    state.textContent = "RECORDING";
-    state.className = "pressed";
-  } else {
-    state.textContent = "IDLE";
-    state.className = "released";
-  }
-}
-
-function setRecorderStatus(msg) {
-  document.getElementById("recorderStatus").textContent = msg;
-}
-
-function loadSavedState() {
-  try {
-    sessions = JSON.parse(localStorage.getItem(SESSION_KEY) || "[]");
-    sessionCounter = Number(localStorage.getItem(COUNTER_KEY) || "0");
-  } catch (err) {
-    sessions = [];
-    sessionCounter = 0;
-    logRaw("Could not load saved sessions: " + err.message);
-  }
 }
 
 function saveState() {
@@ -82,62 +54,32 @@ function saveState() {
   localStorage.setItem(COUNTER_KEY, String(sessionCounter));
 }
 
-function openDatabase() {
-  if (dbPromise) return dbPromise;
-
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = event => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(AUDIO_STORE)) {
-        db.createObjectStore(AUDIO_STORE, { keyPath: "sessionId" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-
-  return dbPromise;
+function loadState() {
+  try {
+    sessions = JSON.parse(localStorage.getItem(SESSION_KEY) || "[]");
+    sessionCounter = Number(localStorage.getItem(COUNTER_KEY) || "0");
+  } catch {
+    sessions = [];
+    sessionCounter = 0;
+  }
 }
 
-async function saveAudioClip(sessionId, blob) {
-  const db = await openDatabase();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readwrite");
-    tx.objectStore(AUDIO_STORE).put({
-      sessionId,
-      blob,
-      type: blob.type || "audio/webm",
-      savedAt: nowIso()
-    });
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
+function setConnection(msg) {
+  const el = $("connection");
+  if (el) el.textContent = msg;
 }
 
-async function getAudioClip(sessionId) {
-  const db = await openDatabase();
+function setState(pressed) {
+  const state = $("state");
+  if (!state) return;
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readonly");
-    const request = tx.objectStore(AUDIO_STORE).get(sessionId);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function deleteAudioClips() {
-  const db = await openDatabase();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readwrite");
-    tx.objectStore(AUDIO_STORE).clear();
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
+  if (pressed) {
+    state.textContent = "PTT PRESSED";
+    state.className = "pressed";
+  } else {
+    state.textContent = "PTT RELEASED";
+    state.className = "released";
+  }
 }
 
 async function connect() {
@@ -189,7 +131,7 @@ function handleValueChanged(event) {
 
   if (byte === 1) {
     logRaw("FFE1 = 01 -> PRESSED");
-    startSession("ptt_press");
+    startSession();
   } else if (byte === 0) {
     logRaw("FFE1 = 00 -> RELEASED");
     endSession("ptt_release");
@@ -198,19 +140,13 @@ function handleValueChanged(event) {
   }
 }
 
-async function startSession(startReason = "unknown") {
+async function startSession() {
   if (currentSession) {
-    logRaw("Ignored duplicate start; session already active");
+    logRaw("Ignored duplicate press; session already active");
     return;
   }
 
   await setupMicrophonePreview();
-
-  if (!micStream) {
-    logRaw("Cannot record: microphone is not ready");
-    setRecorderStatus("Mic unavailable. Check browser permission.");
-    return;
-  }
 
   sessionCounter += 1;
   const start = new Date();
@@ -220,55 +156,19 @@ async function startSession(startReason = "unknown") {
     startedAt: start.toISOString(),
     endedAt: null,
     durationMs: null,
-    startReason,
     endReason: null,
-    audioStored: false,
-    audioType: null,
-    audioBytes: 0,
+    audioName: null,
+    audioUrl: null,
     transcript: "",
     transcriptStatus: "not_requested",
     transcriptError: ""
   };
 
-  try {
-    recordedChunks = [];
-    const mimeType = getBestMimeType();
-    const recorderOptions = mimeType ? { mimeType } : undefined;
-    mediaRecorder = new MediaRecorder(micStream, recorderOptions);
-
-    mediaRecorder.addEventListener("dataavailable", event => {
-      if (event.data && event.data.size > 0) recordedChunks.push(event.data);
-    });
-
-    const recordingSessionId = currentSession.id;
-    mediaRecorder.addEventListener("stop", () => finalizeRecording(recordingSessionId));
-
-    mediaRecorder.start(250);
-    setRecorderStatus("Recording audio locally...");
-  } catch (err) {
-    logRaw("Recorder failed: " + err.message);
-    setRecorderStatus("Recorder failed: " + err.message);
-  }
-
   setState(true);
   updateCurrentSession();
   startTimer(start);
+  startRecording();
   saveState();
-}
-
-function getBestMimeType() {
-  const options = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-    "audio/mp4"
-  ];
-
-  for (const type of options) {
-    if (MediaRecorder.isTypeSupported(type)) return type;
-  }
-
-  return "";
 }
 
 function endSession(reason) {
@@ -277,19 +177,14 @@ function endSession(reason) {
     return;
   }
 
-  const endingSession = currentSession;
+  const endedSession = currentSession;
   const end = new Date();
-  endingSession.endedAt = end.toISOString();
-  endingSession.durationMs = end - new Date(endingSession.startedAt);
-  endingSession.endReason = reason;
 
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
-  } else {
-    finalizeRecording(endingSession.id);
-  }
+  endedSession.endedAt = end.toISOString();
+  endedSession.durationMs = end - new Date(endedSession.startedAt);
+  endedSession.endReason = reason;
 
-  sessions.unshift(endingSession);
+  sessions.unshift(endedSession);
   currentSession = null;
 
   setState(false);
@@ -297,48 +192,66 @@ function endSession(reason) {
   renderSessions();
   updateCurrentSession();
   saveState();
+
+  stopRecordingForSession(endedSession.id);
 }
 
-async function finalizeRecording(sessionId) {
-  if (!sessionId) {
-    setRecorderStatus("Recorder stopped, but no session ID was available.");
-    logRaw("Recorder stop had no session ID");
+function startRecording() {
+  if (!micStream) {
+    logRaw("No microphone stream available");
     return;
   }
 
-  if (recordedChunks.length === 0) {
-    setRecorderStatus("No audio captured for " + sessionId + ". Try a longer test clip.");
-    logRaw("No chunks captured for " + sessionId);
-    return;
-  }
-
-  const type = recordedChunks[0].type || "audio/webm";
-  const audioBlob = new Blob(recordedChunks, { type });
   recordedChunks = [];
 
-  try {
-    await saveAudioClip(sessionId, audioBlob);
+  let options = {};
+  if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+    options = { mimeType: "audio/webm;codecs=opus" };
+  } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+    options = { mimeType: "audio/webm" };
+  }
+
+  mediaRecorder = new MediaRecorder(micStream, options);
+
+  mediaRecorder.ondataavailable = event => {
+    if (event.data && event.data.size > 0) {
+      recordedChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.start();
+  logRaw("Audio recording started");
+}
+
+function stopRecordingForSession(sessionId) {
+  if (!mediaRecorder || mediaRecorder.state === "inactive") {
+    logRaw("Recorder was not active");
+    return;
+  }
+
+  mediaRecorder.onstop = async () => {
+    const type = mediaRecorder.mimeType || "audio/webm";
+    const audioBlob = new Blob(recordedChunks, { type });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audioName = `${sessionId}.webm`;
 
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
-      session.audioStored = true;
-      session.audioType = type;
-      session.audioBytes = audioBlob.size;
+      session.audioName = audioName;
+      session.audioUrl = audioUrl;
       session.transcriptStatus = "queued";
       saveState();
       renderSessions();
     }
 
-    setRecorderStatus(`Audio saved locally for ${sessionId} (${formatBytes(audioBlob.size)}). Sending for transcription...`);
-    logRaw(`Audio saved for ${sessionId}: ${formatBytes(audioBlob.size)} / ${type}`);
+    logRaw(`Audio saved locally: ${audioName}`);
 
     await transcribeAudio(sessionId, audioBlob, type);
-  } catch (err) {
-    setRecorderStatus("Could not save audio: " + err.message);
-    logRaw("Could not save audio: " + err.message);
-  }
-}
+  };
 
+  mediaRecorder.stop();
+  logRaw("Audio recording stopped");
+}
 
 async function transcribeAudio(sessionId, audioBlob, audioType) {
   const session = sessions.find(s => s.id === sessionId);
@@ -352,21 +265,21 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
 
   try {
     const ext = audioType && audioType.includes("mp4") ? "m4a" : "webm";
+
     const formData = new FormData();
     formData.append("audio", audioBlob, `${sessionId}.${ext}`);
 
-    logRaw(`Sending ${sessionId} to transcription bridge...`);
+    logRaw("Uploading audio for transcription...");
 
     const response = await fetch(BRIDGE_TRANSCRIBE_URL, {
       method: "POST",
       body: formData
     });
 
-    const payload = await response.json().catch(() => null);
+    const payload = await response.json();
 
-    if (!response.ok || !payload || payload.ok === false) {
-      const message = payload && payload.error ? payload.error : `HTTP ${response.status}`;
-      throw new Error(message);
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
     }
 
     const text = (payload.text || "").trim();
@@ -379,8 +292,7 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
       renderSessions();
     }
 
-    setRecorderStatus(text ? `Transcript ready for ${sessionId}.` : `Transcript came back empty for ${sessionId}.`);
-    logRaw(`Transcript ready for ${sessionId}: ${text || "[empty]"}`);
+    logRaw("Transcript complete");
   } catch (err) {
     if (session) {
       session.transcriptStatus = "failed";
@@ -389,16 +301,17 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
       renderSessions();
     }
 
-    setRecorderStatus(`Transcription failed for ${sessionId}: ${err.message}`);
-    logRaw(`Transcription failed for ${sessionId}: ${err.message}`);
+    logRaw("TRANSCRIPTION ERROR: " + err.message);
   }
 }
 
 function startTimer(startDate) {
   stopTimer();
+
   timerInterval = setInterval(() => {
     const elapsed = Date.now() - startDate.getTime();
-    document.getElementById("timer").textContent = formatDuration(elapsed);
+    const timer = $("timer");
+    if (timer) timer.textContent = formatDuration(elapsed);
     updateCurrentSession();
   }, 100);
 }
@@ -406,7 +319,9 @@ function startTimer(startDate) {
 function stopTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = null;
-  document.getElementById("timer").textContent = "00:00.0";
+
+  const timer = $("timer");
+  if (timer) timer.textContent = "00:00.0";
 }
 
 function formatDuration(ms) {
@@ -417,15 +332,9 @@ function formatDuration(ms) {
   return `${minutes}:${seconds}.${tenths}`;
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
 function updateCurrentSession() {
-  const el = document.getElementById("currentSession");
+  const el = $("currentSession");
+  if (!el) return;
 
   if (!currentSession) {
     el.textContent = "No active session";
@@ -433,90 +342,54 @@ function updateCurrentSession() {
   }
 
   const elapsed = Date.now() - new Date(currentSession.startedAt).getTime();
+
   el.innerHTML = `
     <strong>${currentSession.id}</strong><br>
     Started: ${new Date(currentSession.startedAt).toLocaleTimeString()}<br>
-    Duration: ${formatDuration(elapsed)}<br>
-    Source: ${currentSession.startReason}
+    Duration: ${formatDuration(elapsed)}
   `;
 }
 
 function renderSessions() {
-  const log = document.getElementById("sessionLog");
+  const log = $("sessionLog");
+  if (!log) return;
 
   if (sessions.length === 0) {
     log.textContent = "No sessions yet.";
     return;
   }
 
-  log.innerHTML = sessions.map(s => `
-    <div class="session">
-      <strong>${s.id}</strong><br>
-      Start: ${new Date(s.startedAt).toLocaleString()}<br>
-      End: ${new Date(s.endedAt).toLocaleString()}<br>
-      Duration: ${formatDuration(s.durationMs)}<br>
-      Start Source: ${s.startReason || "unknown"}<br>
-      End Reason: ${s.endReason}<br>
-      Audio: ${s.audioStored ? `saved locally (${formatBytes(s.audioBytes)})` : "not saved"}<br>
-      Transcript Status: ${s.transcriptStatus || "not_requested"}${s.transcriptError ? ` — ${s.transcriptError}` : ""}<br>
-      Transcript: ${s.transcript || "not added yet"}<br>
-      ${s.audioStored ? `<button class="smallBtn" onclick="playAudio('${s.id}')">Play</button><button class="smallBtn" onclick="downloadAudio('${s.id}')">Download Audio</button><button class="smallBtn" onclick="retryTranscription('${s.id}')">Retry Transcript</button>` : ""}
-    </div>
-  `).join("");
-}
+  log.innerHTML = sessions.map(s => {
+    const transcriptBlock = s.transcript
+      ? `<div><strong>Transcript:</strong><br>${escapeHtml(s.transcript)}</div>`
+      : `<div><strong>Transcript:</strong> ${s.transcriptStatus || "not_requested"}</div>`;
 
-async function playAudio(sessionId) {
-  try {
-    const record = await getAudioClip(sessionId);
-    if (!record) {
-      logRaw("No audio found for " + sessionId);
-      return;
-    }
+    const errorBlock = s.transcriptError
+      ? `<div><strong>Transcript Error:</strong> ${escapeHtml(s.transcriptError)}</div>`
+      : "";
 
-    const url = URL.createObjectURL(record.blob);
-    const player = document.getElementById("audioPlayer");
-    player.src = url;
-    player.play();
-    logRaw("Playing " + sessionId);
-  } catch (err) {
-    logRaw("Play failed: " + err.message);
-  }
-}
+    const audioBlock = s.audioUrl
+      ? `
+        <div>
+          <audio controls src="${s.audioUrl}"></audio><br>
+          <a href="${s.audioUrl}" download="${s.audioName || s.id + ".webm"}">Download Audio</a>
+        </div>
+      `
+      : `<div>Audio: not saved</div>`;
 
-async function downloadAudio(sessionId) {
-  try {
-    const record = await getAudioClip(sessionId);
-    if (!record) {
-      logRaw("No audio found for " + sessionId);
-      return;
-    }
-
-    const ext = record.type.includes("mp4") ? "m4a" : "webm";
-    const url = URL.createObjectURL(record.blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${sessionId}.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    logRaw("Download audio failed: " + err.message);
-  }
-}
-
-
-async function retryTranscription(sessionId) {
-  try {
-    const record = await getAudioClip(sessionId);
-    if (!record) {
-      logRaw("No audio found for " + sessionId);
-      return;
-    }
-
-    setRecorderStatus("Retrying transcription for " + sessionId + "...");
-    await transcribeAudio(sessionId, record.blob, record.type || "audio/webm");
-  } catch (err) {
-    logRaw("Retry transcription failed: " + err.message);
-  }
+    return `
+      <div class="session">
+        <strong>${s.id}</strong><br>
+        Start: ${new Date(s.startedAt).toLocaleString()}<br>
+        End: ${s.endedAt ? new Date(s.endedAt).toLocaleString() : "—"}<br>
+        Duration: ${s.durationMs ? formatDuration(s.durationMs) : "—"}<br>
+        Reason: ${s.endReason || "—"}<br>
+        ${audioBlock}
+        ${transcriptBlock}
+        ${errorBlock}
+      </div>
+    `;
+  }).join("");
 }
 
 function downloadLog() {
@@ -524,14 +397,26 @@ function downloadLog() {
     app: "PTT Field Logger",
     version: APP_VERSION,
     exportedAt: nowIso(),
-    note: "Audio clips are stored locally in this browser. JSON export includes metadata only.",
-    sessions
+    sessions: sessions.map(s => ({
+      id: s.id,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      durationMs: s.durationMs,
+      endReason: s.endReason,
+      audioName: s.audioName,
+      transcript: s.transcript,
+      transcriptStatus: s.transcriptStatus,
+      transcriptError: s.transcriptError
+    }))
   };
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json"
+  });
 
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
+
   a.href = url;
   a.download = "ptt-field-log-" + new Date().toISOString().replaceAll(":", "-") + ".json";
   a.click();
@@ -539,98 +424,72 @@ function downloadLog() {
   URL.revokeObjectURL(url);
 }
 
-async function clearLog() {
-  if (currentSession) endSession("clear_log");
+function clearLog() {
   sessions = [];
   saveState();
-  await deleteAudioClips();
   renderSessions();
-  logRaw("Session log and local audio cleared");
+  logRaw("Session log cleared");
 }
 
 async function setupMicrophonePreview() {
   try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error("getUserMedia is not available in this browser");
+    if (micStream && analyser) {
+      if (audioContext && audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+      return;
     }
 
-    if (!micStream) {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-    }
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    if (!audioContext) {
-      audioContext = new AudioContext();
-      const source = audioContext.createMediaStreamSource(micStream);
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.65;
-      source.connect(analyser);
-    }
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(micStream);
 
-    if (audioContext.state === "suspended") await audioContext.resume();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+
+    source.connect(analyser);
 
     drawVuMeter();
-    setRecorderStatus("Microphone ready.");
     logRaw("Microphone preview ready");
   } catch (err) {
-    setRecorderStatus("Mic preview unavailable: " + err.message);
     logRaw("Mic preview unavailable: " + err.message);
   }
 }
 
 function drawVuMeter() {
-  if (!analyser) return;
+  const canvas = $("vu");
+  if (!canvas || !analyser) return;
 
-  const canvas = document.getElementById("vu");
   const ctx = canvas.getContext("2d");
   const data = new Uint8Array(analyser.frequencyBinCount);
 
-  if (vuAnimation) cancelAnimationFrame(vuAnimation);
-
   function draw() {
     vuAnimation = requestAnimationFrame(draw);
-    analyser.getByteTimeDomainData(data);
+    analyser.getByteFrequencyData(data);
 
-    let sumSquares = 0;
-    for (const v of data) {
-      const centered = v - 128;
-      sumSquares += centered * centered;
-    }
+    let sum = 0;
+    for (const v of data) sum += v;
 
-    const rms = Math.sqrt(sumSquares / data.length);
-    const level = Math.min(1, rms / 42);
-    const width = canvas.width * level;
+    const avg = sum / data.length;
+    const width = Math.min(canvas.width, (avg / 255) * canvas.width * 3);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#0b0b0b";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#22c55e";
     ctx.fillRect(0, 0, width, canvas.height);
-    ctx.strokeStyle = "#f5f5f5";
     ctx.strokeRect(0, 0, canvas.width, canvas.height);
   }
 
   draw();
 }
 
-async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-
-  try {
-    await navigator.serviceWorker.register("./service-worker.js");
-    logRaw("Service worker registered");
-  } catch (err) {
-    logRaw("Service worker failed: " + err.message);
-  }
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-loadSavedState();
+loadState();
 renderSessions();
-setState(false);
-registerServiceWorker();
