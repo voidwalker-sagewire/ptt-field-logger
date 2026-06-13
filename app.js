@@ -1,6 +1,7 @@
-const APP_VERSION = "0.2.3";
-const SESSION_KEY = "pttFieldLogger.sessions.v0.2.3";
-const COUNTER_KEY = "pttFieldLogger.counter.v0.2.3";
+ptt-field-logger-v0.3.0const APP_VERSION = "0.3.0";
+const BRIDGE_TRANSCRIBE_URL = "http://159.203.129.179:8787/transcribe";
+const SESSION_KEY = "pttFieldLogger.sessions.v0.3.0";
+const COUNTER_KEY = "pttFieldLogger.counter.v0.3.0";
 const DB_NAME = "ptt-field-logger-db";
 const DB_VERSION = 1;
 const AUDIO_STORE = "audioClips";
@@ -224,7 +225,9 @@ async function startSession(startReason = "unknown") {
     audioStored: false,
     audioType: null,
     audioBytes: 0,
-    transcript: ""
+    transcript: "",
+    transcriptStatus: "not_requested",
+    transcriptError: ""
   };
 
   try {
@@ -321,15 +324,73 @@ async function finalizeRecording(sessionId) {
       session.audioStored = true;
       session.audioType = type;
       session.audioBytes = audioBlob.size;
+      session.transcriptStatus = "queued";
       saveState();
       renderSessions();
     }
 
-    setRecorderStatus(`Audio saved locally for ${sessionId} (${formatBytes(audioBlob.size)}).`);
+    setRecorderStatus(`Audio saved locally for ${sessionId} (${formatBytes(audioBlob.size)}). Sending for transcription...`);
     logRaw(`Audio saved for ${sessionId}: ${formatBytes(audioBlob.size)} / ${type}`);
+
+    await transcribeAudio(sessionId, audioBlob, type);
   } catch (err) {
     setRecorderStatus("Could not save audio: " + err.message);
     logRaw("Could not save audio: " + err.message);
+  }
+}
+
+
+async function transcribeAudio(sessionId, audioBlob, audioType) {
+  const session = sessions.find(s => s.id === sessionId);
+
+  if (session) {
+    session.transcriptStatus = "uploading";
+    session.transcriptError = "";
+    saveState();
+    renderSessions();
+  }
+
+  try {
+    const ext = audioType && audioType.includes("mp4") ? "m4a" : "webm";
+    const formData = new FormData();
+    formData.append("audio", audioBlob, `${sessionId}.${ext}`);
+
+    logRaw(`Sending ${sessionId} to transcription bridge...`);
+
+    const response = await fetch(BRIDGE_TRANSCRIBE_URL, {
+      method: "POST",
+      body: formData
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok || !payload || payload.ok === false) {
+      const message = payload && payload.error ? payload.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const text = (payload.text || "").trim();
+
+    if (session) {
+      session.transcript = text;
+      session.transcriptStatus = text ? "complete" : "empty";
+      session.transcriptError = "";
+      saveState();
+      renderSessions();
+    }
+
+    setRecorderStatus(text ? `Transcript ready for ${sessionId}.` : `Transcript came back empty for ${sessionId}.`);
+    logRaw(`Transcript ready for ${sessionId}: ${text || "[empty]"}`);
+  } catch (err) {
+    if (session) {
+      session.transcriptStatus = "failed";
+      session.transcriptError = err.message;
+      saveState();
+      renderSessions();
+    }
+
+    setRecorderStatus(`Transcription failed for ${sessionId}: ${err.message}`);
+    logRaw(`Transcription failed for ${sessionId}: ${err.message}`);
   }
 }
 
@@ -397,8 +458,9 @@ function renderSessions() {
       Start Source: ${s.startReason || "unknown"}<br>
       End Reason: ${s.endReason}<br>
       Audio: ${s.audioStored ? `saved locally (${formatBytes(s.audioBytes)})` : "not saved"}<br>
+      Transcript Status: ${s.transcriptStatus || "not_requested"}${s.transcriptError ? ` — ${s.transcriptError}` : ""}<br>
       Transcript: ${s.transcript || "not added yet"}<br>
-      ${s.audioStored ? `<button class="smallBtn" onclick="playAudio('${s.id}')">Play</button><button class="smallBtn" onclick="downloadAudio('${s.id}')">Download Audio</button>` : ""}
+      ${s.audioStored ? `<button class="smallBtn" onclick="playAudio('${s.id}')">Play</button><button class="smallBtn" onclick="downloadAudio('${s.id}')">Download Audio</button><button class="smallBtn" onclick="retryTranscription('${s.id}')">Retry Transcript</button>` : ""}
     </div>
   `).join("");
 }
@@ -438,6 +500,22 @@ async function downloadAudio(sessionId) {
     URL.revokeObjectURL(url);
   } catch (err) {
     logRaw("Download audio failed: " + err.message);
+  }
+}
+
+
+async function retryTranscription(sessionId) {
+  try {
+    const record = await getAudioClip(sessionId);
+    if (!record) {
+      logRaw("No audio found for " + sessionId);
+      return;
+    }
+
+    setRecorderStatus("Retrying transcription for " + sessionId + "...");
+    await transcribeAudio(sessionId, record.blob, record.type || "audio/webm");
+  } catch (err) {
+    logRaw("Retry transcription failed: " + err.message);
   }
 }
 
