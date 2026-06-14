@@ -1,53 +1,1394 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PTT Field Logger</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>HerdMate Field Scanner</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@400;600&display=swap');
+
+  :root {
+    --bg:#0a0a0a; --panel:#141414; --panel2:#1c1c1c; --border:#2a2a2a;
+    --orange:#e86a1a; --orange-bright:#ff7c28; --orange-dim:#2a1500; --orange-muted:#7a3a0a;
+    --text:#f0f0f0; --muted:#888; --red:#e04040; --red-dim:#3d1010;
+    --green:#4caf50; --green-dim:#1a3d1a; --blue:#4a9eff; --blue-dim:#0a1a2a;
+  }
+  .day {
+    --bg:#f5f0e8; --panel:#fff; --panel2:#ede8df; --border:#d0c8b8;
+    --orange:#c85a0a; --orange-bright:#e06a10; --orange-dim:#fde8d0; --orange-muted:#f0c090;
+    --text:#1a1a1a; --muted:#666; --red:#c03030; --red-dim:#fdd;
+    --green:#2e7d32; --green-dim:#d0ead0; --blue:#1a6abf; --blue-dim:#d0e4f8;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--bg); color:var(--text); font-family:'Source Sans 3',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+
+  .screen { display:none; flex-direction:column; min-height:100vh; }
+  .screen.show { display:flex; }
+
+  /* CHROME REQUIRED */
+  #chromeScreen { align-items:center; justify-content:center; padding:30px; background:var(--bg); text-align:center; }
+  .chrome-icon { font-size:4rem; margin-bottom:20px; }
+  .chrome-title { font-family:'Oswald',sans-serif; font-size:1.8rem; color:var(--orange); margin-bottom:12px; }
+  .chrome-desc { font-size:0.88rem; color:var(--muted); margin-bottom:28px; line-height:1.7; max-width:300px; }
+  .chrome-btn { display:flex; align-items:center; justify-content:center; gap:10px; background:#4285F4; border:none; border-radius:10px; padding:16px 28px; font-size:1rem; font-weight:700; color:#fff; cursor:pointer; min-height:54px; width:100%; max-width:300px; font-family:'Oswald',sans-serif; letter-spacing:1px; }
+
+  /* LOGIN */
+  #loginScreen { align-items:center; justify-content:center; padding:30px; background:var(--bg); }
+  .login-logo svg { width:90px; height:90px; margin-bottom:16px; }
+  .login-brand { font-family:'Oswald',sans-serif; font-size:2.8rem; font-weight:700; color:var(--orange); letter-spacing:2px; }
+  .login-sub { font-size:0.7rem; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:36px; }
+  .login-desc { font-size:0.88rem; color:var(--muted); text-align:center; margin-bottom:28px; line-height:1.7; max-width:300px; }
+  .google-btn { display:flex; align-items:center; gap:12px; background:#fff; border:none; border-radius:10px; padding:14px 28px; font-size:1rem; font-weight:600; color:#333; cursor:pointer; box-shadow:0 2px 12px rgba(0,0,0,0.4); transition:all .2s; min-height:54px; }
+  .google-btn svg { width:24px; height:24px; flex-shrink:0; }
+  .login-note { font-size:0.7rem; color:var(--muted); margin-top:20px; text-align:center; max-width:280px; line-height:1.6; }
+
+  /* ONBOARDING */
+  #onboardScreen { align-items:center; justify-content:center; padding:24px; background:var(--bg); }
+  .onboard-card { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:32px 24px; width:100%; max-width:420px; text-align:center; }
+  .onboard-icon { font-size:3rem; margin-bottom:12px; }
+  .onboard-title { font-family:'Oswald',sans-serif; font-size:1.6rem; color:var(--orange); margin-bottom:8px; }
+  .onboard-desc { font-size:0.85rem; color:var(--muted); margin-bottom:28px; line-height:1.7; }
+  .onboard-input { width:100%; background:var(--bg); border:2px solid var(--orange); border-radius:10px; color:var(--text); font-family:'Oswald',sans-serif; font-size:1.2rem; font-weight:600; padding:14px 16px; outline:none; text-align:center; margin-bottom:16px; min-height:54px; }
+  .onboard-input::placeholder { color:var(--muted); font-weight:400; font-size:1rem; font-family:'Source Sans 3',sans-serif; }
+  .onboard-btn { width:100%; background:var(--orange); border:none; border-radius:10px; color:#000; font-family:'Oswald',sans-serif; font-size:1.2rem; font-weight:700; letter-spacing:1px; padding:16px; cursor:pointer; min-height:56px; transition:background .15s; }
+  .onboard-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .onboard-progress { margin-top:20px; font-size:0.82rem; color:var(--muted); line-height:1.8; }
+  .onboard-progress .step { display:flex; align-items:center; gap:8px; justify-content:center; margin:4px 0; }
+  .onboard-progress .step.done { color:var(--green); }
+  .onboard-progress .step.active { color:var(--orange); }
+  .onboard-note { font-size:0.7rem; color:var(--muted); margin-top:20px; line-height:1.6; }
+
+  /* HEADER */
+  header { background:var(--bg); border-bottom:3px solid var(--orange); padding:10px 14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
+  .logo-svg { width:44px; height:44px; flex-shrink:0; }
+  .brand-text { font-family:'Oswald',sans-serif; font-size:1.5rem; font-weight:700; letter-spacing:1px; color:var(--orange); line-height:1; }
+  .brand-sub { font-size:0.6rem; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-top:2px; }
+  .hdr-right { margin-left:auto; display:flex; align-items:center; gap:6px; }
+  .mode-btn { background:var(--panel2); border:1px solid var(--border); border-radius:50%; width:44px; height:44px; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .hdr-menu { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:0.75rem; color:var(--muted); cursor:pointer; min-height:36px; font-family:'Source Sans 3',sans-serif; }
+  .hdr-menu:hover { border-color:var(--orange); color:var(--orange); }
+
+  /* STATUS BARS */
+  .status-bar { padding:7px 14px; display:flex; align-items:center; gap:8px; font-size:0.75rem; font-weight:600; }
+  .status-bar.sheets-ok { background:var(--green-dim); border-bottom:1px solid var(--green); color:var(--green); }
+  .status-bar.sheets-err { background:var(--red-dim); border-bottom:1px solid var(--red); color:var(--red); }
+  .status-bar.sheets-pending { background:var(--orange-dim); border-bottom:1px solid var(--orange); color:var(--orange); }
+  .status-bar.gps-ok { background:#0a1a0a; border-bottom:1px solid var(--green); color:var(--green); }
+  .status-bar.gps-searching { background:#1a1a0a; border-bottom:1px solid #d29922; color:#d29922; }
+  .status-bar.gps-err { background:var(--red-dim); border-bottom:1px solid var(--red); color:var(--red); cursor:pointer; }
+  .status-bar.ble-connected { background:#0a1a2a; border-bottom:1px solid var(--blue); color:var(--blue); }
+  .status-bar.ble-disconnected { background:var(--panel2); border-bottom:1px solid var(--border); color:var(--muted); cursor:pointer; }
+  .status-bar.ble-scanning { background:#0a1a2a; border-bottom:1px solid var(--blue); color:var(--blue); animation:blePulse 1s infinite; }
+  @keyframes blePulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* MODE SELECTOR */
+  .mode-selector { display:flex; gap:0; margin:10px 14px 0; border-radius:10px; overflow:hidden; border:2px solid var(--border); }
+  .mode-tab { flex:1; padding:12px 8px; text-align:center; cursor:pointer; font-family:'Oswald',sans-serif; font-size:0.85rem; font-weight:600; letter-spacing:0.5px; transition:all .2s; background:var(--panel); color:var(--muted); border:none; }
+  .mode-tab.active-hc { background:var(--orange); color:#000; }
+  .mode-tab.active-bb { background:var(--blue); color:#fff; }
+
+  /* AUDIO BAR */
+  .audio-bar { padding:8px 14px; display:flex; align-items:center; gap:10px; background:var(--panel2); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .audio-label { font-size:0.72rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:1px; }
+  .audio-btn { padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel); color:var(--muted); font-size:0.72rem; font-family:'Oswald',sans-serif; cursor:pointer; transition:all .15s; min-height:32px; }
+  .audio-btn.on { border-color:var(--green); color:var(--green); background:var(--green-dim); }
+  .audio-btn.vib.on { border-color:var(--blue); color:var(--blue); background:var(--blue-dim); }
+  .audio-btn.ble-btn { border-color:var(--blue); color:var(--blue); }
+  .audio-btn.ble-btn.connected { background:var(--blue-dim); }
+
+  /* PASTURE BAR */
+  .pasture-bar { background:var(--orange-dim); border-bottom:2px solid var(--orange); padding:10px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pasture-bar.bb-mode { background:var(--blue-dim); border-color:var(--blue); }
+  .pasture-label { font-family:'Oswald',sans-serif; font-size:0.75rem; text-transform:uppercase; letter-spacing:2px; color:var(--orange); white-space:nowrap; }
+  .pasture-label.bb { color:var(--blue); }
+  #pastureInput { background:var(--bg); border:2px solid var(--orange); border-radius:8px; color:var(--text); font-family:'Oswald',sans-serif; font-size:1.1rem; font-weight:600; padding:10px 14px; flex:1; min-width:140px; outline:none; min-height:48px; }
+  #pastureInput::placeholder { color:var(--muted); font-weight:400; font-size:0.9rem; font-family:'Source Sans 3',sans-serif; }
+  .set-btn { background:var(--orange); border:none; border-radius:8px; color:#000; font-family:'Oswald',sans-serif; font-size:1rem; font-weight:700; letter-spacing:1px; padding:12px 18px; cursor:pointer; min-height:48px; min-width:72px; transition:background .15s; }
+  .set-btn.bb { background:var(--blue); color:#fff; }
+
+  /* ACTIVE BAR */
+  .active-bar { background:var(--panel); border-bottom:1px solid var(--border); padding:10px 14px; display:flex; align-items:center; gap:10px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--orange); flex-shrink:0; }
+  .dot.blink { animation:blink 1.5s infinite; }
+  .dot.blink-blue { background:var(--blue); animation:blink 1s infinite; }
+  .dot.idle { background:var(--muted); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .active-name { font-family:'Oswald',sans-serif; font-size:1.1rem; font-weight:600; color:var(--orange); }
+  .active-name.blue { color:var(--blue); }
+  .active-name.none { color:var(--muted); font-weight:400; font-size:0.9rem; font-family:'Source Sans 3',sans-serif; }
+
+  /* SCAN ZONE */
+  .scan-zone { margin:12px 14px 8px; background:var(--panel); border:2px dashed var(--border); border-radius:12px; padding:14px; transition:all .2s; }
+  .scan-zone.lit { border-color:var(--orange); border-style:solid; background:var(--orange-dim); }
+  .scan-hint { font-size:0.78rem; color:var(--muted); margin-bottom:10px; text-align:center; }
+  .scan-hint.warn { color:var(--orange); }
+  .scan-row { display:flex; gap:8px; }
+  #tagInput { flex:1; background:var(--bg); border:2px solid var(--border); border-radius:8px; color:var(--text); font-family:monospace; font-size:1rem; padding:12px 14px; outline:none; transition:border-color .15s; min-height:52px; }
+  #tagInput:focus { border-color:var(--orange); }
+  #tagInput:disabled { opacity:.35; cursor:not-allowed; }
+  #tagInput::placeholder { color:var(--muted); font-size:.85rem; font-family:'Source Sans 3',sans-serif; }
+  #addBtn { padding:12px 20px; background:var(--orange); border:none; border-radius:8px; color:#000; font-family:'Oswald',sans-serif; font-weight:700; font-size:1rem; letter-spacing:1px; cursor:pointer; min-height:52px; min-width:72px; transition:background .15s; }
+  #addBtn:disabled { opacity:.35; cursor:not-allowed; }
+
+  /* HEAD COUNT BANNER */
+  .headcount-banner { margin:0 14px 10px; background:var(--panel); border:2px solid var(--border); border-radius:12px; padding:14px; display:flex; align-items:center; gap:14px; }
+  .headcount-banner.complete { border-color:var(--green); background:var(--green-dim); }
+  .headcount-num { font-family:'Oswald',sans-serif; font-size:3rem; font-weight:700; color:var(--orange); line-height:1; min-width:70px; text-align:center; }
+  .headcount-banner.complete .headcount-num { color:var(--green); }
+  .headcount-info { flex:1; }
+  .headcount-label { font-size:0.68rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:4px; }
+  .headcount-pasture { font-family:'Oswald',sans-serif; font-size:1rem; color:var(--text); }
+  .headcount-target { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .headcount-target input { width:70px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Oswald',sans-serif; font-size:1rem; padding:4px 8px; outline:none; text-align:center; }
+  .headcount-target input:focus { border-color:var(--orange); }
+  .headcount-target label { font-size:0.75rem; color:var(--muted); }
+  .complete-badge { font-family:'Oswald',sans-serif; font-size:0.8rem; font-weight:700; letter-spacing:1px; color:var(--green); border:1px solid var(--green); border-radius:6px; padding:4px 10px; background:var(--green-dim); }
+
+  /* STATS */
+  .stats-row { display:flex; gap:8px; padding:0 14px 10px; flex-wrap:wrap; }
+  .stat { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:10px 14px; flex:1; min-width:68px; text-align:center; }
+  .stat .n { font-family:'Oswald',sans-serif; font-size:1.8rem; font-weight:700; line-height:1; color:var(--orange); }
+  .stat .n.green { color:var(--green); }
+  .stat .l { font-size:.6rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-top:3px; }
+
+  /* BB */
+  .bb-target-bar { background:var(--blue-dim); border-bottom:2px solid var(--blue); padding:10px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .bb-target-label { font-family:'Oswald',sans-serif; font-size:0.75rem; text-transform:uppercase; letter-spacing:2px; color:var(--blue); white-space:nowrap; }
+  #bbTagInput { background:var(--bg); border:2px solid var(--blue); border-radius:8px; color:var(--text); font-family:monospace; font-size:1rem; font-weight:600; padding:10px 14px; flex:1; min-width:160px; outline:none; min-height:48px; }
+  #bbTagInput::placeholder { color:var(--muted); font-weight:400; font-size:0.85rem; font-family:'Source Sans 3',sans-serif; }
+  .bb-set-btn { background:var(--blue); border:none; border-radius:8px; color:#fff; font-family:'Oswald',sans-serif; font-size:1rem; font-weight:700; padding:12px 18px; cursor:pointer; min-height:48px; min-width:72px; }
+  .bb-status { margin:12px 14px 8px; border-radius:12px; padding:20px; text-align:center; transition:all .3s; background:var(--panel); border:2px dashed var(--border); }
+  .bb-status.searching { border-color:var(--blue); border-style:solid; background:var(--blue-dim); animation:bbPulse 1.5s infinite; }
+  .bb-status.found { border-color:var(--green); border-style:solid; background:var(--green-dim); animation:none; }
+  @keyframes bbPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  .bb-status-icon { font-size:2.5rem; margin-bottom:8px; }
+  .bb-status-text { font-family:'Oswald',sans-serif; font-size:1.1rem; font-weight:600; color:var(--muted); }
+  .bb-status.searching .bb-status-text { color:var(--blue); }
+  .bb-status.found .bb-status-text { color:var(--green); font-size:1.4rem; }
+  .bb-target-display { font-family:monospace; font-size:0.82rem; color:var(--muted); margin-top:6px; }
+  .bb-status.searching .bb-target-display { color:var(--blue); }
+
+  /* TABS & TABLE */
+  .tabs { display:flex; gap:6px; padding:0 14px 10px; overflow-x:auto; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab { display:flex; align-items:center; gap:5px; padding:7px 14px; border-radius:20px; border:1px solid var(--border); font-size:.78rem; font-weight:600; cursor:pointer; background:var(--panel); color:var(--muted); white-space:nowrap; min-height:38px; transition:all .15s; }
+  .tab:hover { border-color:var(--orange); color:var(--orange); }
+  .tab.on { background:var(--orange-dim); border-color:var(--orange); color:var(--orange); }
+  .tab .cnt { background:#ffffff18; border-radius:10px; padding:1px 7px; font-size:.7rem; }
+  .table-wrap { flex:1; overflow-x:auto; padding:0 14px 90px; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  thead th { background:var(--panel); border-bottom:2px solid var(--orange); padding:10px; text-align:left; font-family:'Oswald',sans-serif; font-size:.68rem; text-transform:uppercase; letter-spacing:1.5px; color:var(--orange); white-space:nowrap; position:sticky; top:0; }
+  tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
+  tbody tr:hover { background:var(--panel); }
+  tbody tr.flash { animation:rowIn .35s ease-out; }
+  tbody tr.found-row { background:var(--green-dim) !important; }
+  @keyframes rowIn { from{background:var(--orange-dim);} to{background:transparent;} }
+  tbody td { padding:11px 10px; vertical-align:middle; }
+  .tag-id { font-family:monospace; font-weight:600; color:var(--text); font-size:.88rem; }
+  .chip { display:inline-block; padding:3px 9px; border-radius:4px; font-size:.72rem; font-weight:700; font-family:'Oswald',sans-serif; background:var(--orange-dim); color:var(--orange); border:1px solid var(--orange-muted); }
+  .read-count { display:inline-block; padding:2px 7px; border-radius:4px; font-size:.68rem; font-weight:600; background:var(--panel2); color:var(--muted); border:1px solid var(--border); font-family:'Oswald',sans-serif; }
+  .gps-line { font-size:.65rem; color:var(--muted); display:block; margin-top:2px; }
+  .gps-line.ok { color:var(--green); }
+
+  /* EXPORT BAR */
+  .export-bar { position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:2px solid var(--orange); padding:10px 14px; display:flex; gap:8px; z-index:50; }
+  .exp { flex:1; padding:10px 6px; border-radius:8px; border:2px solid var(--orange-muted); cursor:pointer; font-family:'Oswald',sans-serif; font-size:.82rem; font-weight:600; background:#1e0e00; color:var(--orange); text-align:center; min-height:48px; transition:all .15s; }
+  .exp:hover { border-color:var(--orange); background:var(--orange-dim); }
+  .exp:active { background:var(--orange); color:#000; }
+  .exp.pri { background:var(--orange); border-color:var(--orange); color:#000; }
+  .exp.pri:hover { background:var(--orange-bright); }
+  .exp.del { color:var(--red); border-color:#5a1a1a; background:#1a0a0a; max-width:52px; }
+  .exp.del:hover { border-color:var(--red); background:var(--red-dim); }
+
+  /* PASTURE MANAGER MODAL */
+  .modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
+  .modal-sheet { background:var(--panel); border-radius:16px 16px 0 0; width:100%; max-width:500px; padding:20px; max-height:80vh; overflow-y:auto; }
+  .modal-title { font-family:'Oswald',sans-serif; font-size:1.2rem; color:var(--orange); margin-bottom:4px; }
+  .modal-desc { font-size:0.75rem; color:var(--muted); margin-bottom:16px; }
+  .pasture-item { display:flex; align-items:center; gap:8px; padding:10px; background:var(--panel2); border-radius:8px; margin-bottom:8px; border:1px solid var(--border); }
+  .pasture-item input { background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Oswald',sans-serif; font-size:0.9rem; padding:6px 10px; outline:none; flex:1; min-width:0; }
+  .pasture-item input:focus { border-color:var(--orange); }
+  .pasture-item .target-input { width:60px; text-align:center; }
+  .pasture-item-label { font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+  .modal-add-btn { width:100%; background:var(--orange-dim); border:2px dashed var(--orange-muted); border-radius:8px; color:var(--orange); font-family:'Oswald',sans-serif; font-size:0.9rem; font-weight:600; padding:12px; cursor:pointer; margin-top:4px; min-height:44px; }
+  .modal-save-btn { width:100%; background:var(--orange); border:none; border-radius:8px; color:#000; font-family:'Oswald',sans-serif; font-size:1rem; font-weight:700; padding:14px; cursor:pointer; margin-top:12px; min-height:48px; }
+  .modal-close { float:right; background:none; border:none; color:var(--muted); font-size:1.4rem; cursor:pointer; padding:0 4px; }
+  .del-pasture { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1rem; padding:4px 6px; border-radius:4px; }
+  .del-pasture:hover { color:var(--red); }
+
+  .toast { position:fixed; bottom:140px; left:50%; transform:translateX(-50%) translateY(60px); background:#000; border:2px solid var(--orange); color:var(--orange); padding:10px 20px; border-radius:8px; font-family:'Oswald',sans-serif; font-size:.9rem; font-weight:600; transition:transform .25s ease; z-index:999; pointer-events:none; white-space:nowrap; max-width:90vw; text-align:center; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.warn { border-color:var(--red); color:var(--red); }
+  .toast.good { border-color:var(--green); color:var(--green); }
+  .toast.blue { border-color:var(--blue); color:var(--blue); }
+</style>
 </head>
-<body>
-  <main>
-    <h1>PTT Field Logger</h1>
-    <p class="subtitle">3M Pro-Comms BLE PTT voice logger</p>
+<body id="app">
 
-    <section class="card">
-      <button id="connectBtn">Connect Headset</button>
-      <button id="micTestBtn">Mic Test / Wake Audio</button>
-      <div id="connection">Not connected</div>
-      <div id="state" class="released">IDLE</div>
-      <div id="timer">00:00.0</div>
-      <canvas id="vu" width="320" height="52"></canvas>
-      <div id="recorderStatus">Recorder not started.</div>
-    </section>
+<!-- CHROME REQUIRED -->
+<div class="screen" id="chromeScreen" style="align-items:center;justify-content:center;padding:30px;text-align:center;">
+  <div class="chrome-icon">🌐</div>
+  <div class="chrome-title">Open in Chrome</div>
+  <div class="chrome-desc">HerdMate uses Bluetooth to connect to your R6 scanner. Bluetooth requires Google Chrome.</div>
+  <div style="background:#1a1a1a;border:2px solid #4285F4;border-radius:10px;padding:16px;margin-bottom:20px;width:100%;max-width:320px;">
+    <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:1px;color:#4285F4;margin-bottom:8px;font-family:'Oswald',sans-serif;">Copy this URL</div>
+    <div id="currentUrl" style="font-family:monospace;font-size:0.9rem;color:#fff;word-break:break-all;margin-bottom:12px;">scanner.herdmate.ag</div>
+    <button onclick="copyUrl()" style="background:#4285F4;border:none;border-radius:8px;color:#fff;font-family:'Oswald',sans-serif;font-size:0.9rem;font-weight:700;padding:10px 20px;cursor:pointer;width:100%;min-height:44px;">📋 Copy URL</button>
+  </div>
+  <div style="font-size:0.82rem;color:var(--muted);line-height:1.8;max-width:300px;">
+    <strong style="color:var(--text);">How to open in Chrome:</strong><br>
+    1. Tap Copy URL above<br>
+    2. Open Chrome on your phone<br>
+    3. Paste the URL and go
+  </div>
+  <div style="margin-top:20px;font-size:0.7rem;color:var(--muted);max-width:280px;line-height:1.5;">
+    Already in Chrome? The app will load automatically next time.
+  </div>
+</div>
 
-    <section class="card">
-      <h2>Manual Control</h2>
-      <button id="manualStartBtn">Start Recording</button>
-      <button id="manualStopBtn">Stop Recording</button>
-      <p class="hint">Use these if Bluetooth PTT flakes out. PTT still starts/stops recording when connected.</p>
-    </section>
+<!-- LOGIN -->
+<div class="screen" id="loginScreen" style="align-items:center;justify-content:center;padding:30px;">
+  <div class="login-logo">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <g fill="#e86a1a">
+        <ellipse cx="22" cy="38" rx="12" ry="8" transform="rotate(-20 22 38)"/>
+        <ellipse cx="78" cy="38" rx="12" ry="8" transform="rotate(20 78 38)"/>
+        <ellipse cx="50" cy="52" rx="28" ry="32"/>
+        <ellipse cx="50" cy="72" rx="16" ry="10" fill="#c85a0a"/>
+        <ellipse cx="44" cy="73" rx="3.5" ry="2.5" fill="#0a0a0a"/>
+        <ellipse cx="56" cy="73" rx="3.5" ry="2.5" fill="#0a0a0a"/>
+        <ellipse cx="38" cy="50" rx="5" ry="5.5" fill="#0a0a0a"/>
+        <ellipse cx="62" cy="50" rx="5" ry="5.5" fill="#0a0a0a"/>
+        <ellipse cx="37" cy="49" rx="1.5" ry="2" fill="#fff" opacity=".5"/>
+        <ellipse cx="61" cy="49" rx="1.5" ry="2" fill="#fff" opacity=".5"/>
+        <ellipse cx="50" cy="24" rx="10" ry="7"/>
+        <ellipse cx="42" cy="22" rx="7" ry="5" transform="rotate(-15 42 22)"/>
+        <ellipse cx="58" cy="22" rx="7" ry="5" transform="rotate(15 58 22)"/>
+      </g>
+    </svg>
+  </div>
+  <div class="login-brand">HerdMate</div>
+  <div class="login-sub">Field Scanner</div>
+  <div class="login-desc">Sign in with Google to sync your scans live to your HerdMate spreadsheet.</div>
+  <button class="google-btn" onclick="signIn()">
+    <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+    Sign in with Google
+  </button>
+  <div class="login-note">Your data goes to your own Google Drive. HerdMate never stores your animal records.</div>
+</div>
 
-    <section class="card">
-      <h2>Current Session</h2>
-      <div id="currentSession">No active session</div>
-      <audio id="audioPlayer" controls></audio>
-    </section>
+<!-- ONBOARDING -->
+<div class="screen" id="onboardScreen" style="align-items:center;justify-content:center;padding:24px;">
+  <div class="onboard-card">
+    <div class="onboard-icon">🐄</div>
+    <div class="onboard-title">Welcome to HerdMate</div>
+    <div class="onboard-desc">What's the name of your operation? We'll set up your HerdMate workspace in Google Drive automatically.</div>
+    <input class="onboard-input" id="operationInput" placeholder="e.g. Dutton Cattle Company" autocomplete="off" spellcheck="false" maxlength="50" />
+    <button class="onboard-btn" id="onboardBtn" onclick="createWorkspace()">Set Up My HerdMate →</button>
+    <div class="onboard-progress" id="onboardProgress" style="display:none">
+      <div class="step" id="stepCreate">⏳ Creating your Google Sheet...</div>
+      <div class="step" id="stepTab">⏳ Setting up data tabs...</div>
+      <div class="step" id="stepHeaders">⏳ Writing column headers...</div>
+      <div class="step" id="stepDone">⏳ Almost ready...</div>
+    </div>
+    <div class="onboard-note">A Google Sheet named "HerdMate — [Your Operation]" will appear in your Google Drive.</div>
+  </div>
+</div>
 
-    <section class="card">
-      <h2>Session Log</h2>
-      <button id="exportBtn">Download JSON Log</button>
-      <button id="clearBtn">Clear Log + Audio</button>
-      <div id="sessionLog"></div>
-    </section>
+<!-- MAIN APP -->
+<div class="screen" id="appScreen">
+  <header>
+    <svg class="logo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <g fill="#e86a1a">
+        <ellipse cx="22" cy="38" rx="12" ry="8" transform="rotate(-20 22 38)"/>
+        <ellipse cx="78" cy="38" rx="12" ry="8" transform="rotate(20 78 38)"/>
+        <ellipse cx="50" cy="52" rx="28" ry="32"/>
+        <ellipse cx="50" cy="72" rx="16" ry="10" fill="#c85a0a"/>
+        <ellipse cx="44" cy="73" rx="3.5" ry="2.5" fill="#0a0a0a"/>
+        <ellipse cx="56" cy="73" rx="3.5" ry="2.5" fill="#0a0a0a"/>
+        <ellipse cx="38" cy="50" rx="5" ry="5.5" fill="#0a0a0a"/>
+        <ellipse cx="62" cy="50" rx="5" ry="5.5" fill="#0a0a0a"/>
+        <ellipse cx="37" cy="49" rx="1.5" ry="2" fill="#fff" opacity=".5"/>
+        <ellipse cx="61" cy="49" rx="1.5" ry="2" fill="#fff" opacity=".5"/>
+        <ellipse cx="50" cy="24" rx="10" ry="7"/>
+        <ellipse cx="42" cy="22" rx="7" ry="5" transform="rotate(-15 42 22)"/>
+        <ellipse cx="58" cy="22" rx="7" ry="5" transform="rotate(15 58 22)"/>
+      </g>
+    </svg>
+    <div>
+      <div class="brand-text">HerdMate</div>
+      <div class="brand-sub" id="operationName">Field Scanner</div>
+    </div>
+    <div class="hdr-right">
+      <button class="mode-btn" id="lockBtn" onclick="toggleRotation()" title="Lock screen rotation">🔄</button>
+      <button class="mode-btn" id="modeBtn" onclick="toggleMode()">🌙</button>
+      <button class="hdr-menu" onclick="signOut()">Sign Out</button>
+    </div>
+  </header>
 
-    <section class="card">
-      <h2>Raw Event Log</h2>
-      <div id="rawLog"></div>
-    </section>
-  </main>
+  <div class="status-bar sheets-pending" id="sheetsBar">⏳ Connecting...</div>
+  <div class="status-bar gps-searching" id="gpsBar" onclick="retryGPS()">📡 Acquiring GPS...</div>
+  <!-- BLE STATUS BAR — tap to connect R6 -->
+  <div class="status-bar ble-disconnected" id="bleBar" onclick="connectR6()">📶 Tap to connect R6 scanner</div>
 
-  <script src="app.js"></script>
+  <!-- BLE DEBUG PANEL — toggle with button -->
+  <div id="bleDebugPanel" style="display:none;background:#0a0a0a;border-bottom:2px solid var(--blue);padding:8px 14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-family:'Oswald',sans-serif;">BLE Raw Debug</span>
+      <button onclick="document.getElementById('bleDebugLog').innerHTML=''" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);font-size:0.7rem;padding:2px 8px;cursor:pointer;">Clear</button>
+    </div>
+    <div id="bleDebugLog" style="max-height:160px;overflow-y:auto;color:#4a9eff;"></div>
+    <div style="font-size:0.65rem;color:var(--muted);margin-top:4px;">Pull R6 trigger to see raw data here</div>
+  </div>
+
+  <div class="mode-selector">
+    <button class="mode-tab active-hc" id="tabHC" onclick="switchMode('hc')">🐄 Head Count</button>
+    <button class="mode-tab" id="tabBB" onclick="switchMode('bb')">📡 Bovine Beacon</button>
+  </div>
+
+  <div class="audio-bar">
+    <span class="audio-label">Audio:</span>
+    <button class="audio-btn" id="audioScanBtn" onclick="toggleAudio('scan')">🔇 Scan Tick</button>
+    <button class="audio-btn on" id="audioAlertBtn" onclick="toggleAudio('alert')">🔊 Alert</button>
+    <button class="audio-btn vib on" id="vibBtn" onclick="toggleAudio('vib')">📳 Vibrate</button>
+  </div>
+
+  <!-- HEAD COUNT -->
+  <div id="hcMode">
+    <div class="pasture-bar">
+      <span class="pasture-label">📍 Pasture</span>
+      <input id="pastureInput" placeholder="Name this pasture..." autocomplete="off" spellcheck="false" />
+      <button class="set-btn" onclick="setPasture()">SET</button>
+    </div>
+    <!-- SAVED PASTURES -->
+    <div id="savedPasturesBar" style="padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border);background:var(--panel2);">
+      <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);white-space:nowrap;">Saved:</span>
+      <div id="savedPasturesList" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+      <button onclick="showPastureManager()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:0.75rem;padding:4px 10px;cursor:pointer;min-height:30px;font-family:'Oswald',sans-serif;white-space:nowrap;">✏️ Edit</button>
+    </div>
+    <div class="active-bar">
+      <div class="dot idle" id="scanDot"></div>
+      <div class="active-name none" id="activeName">No pasture selected</div>
+    </div>
+    <div class="scan-zone" id="scanZone">
+      <div class="scan-hint warn" id="scanHint">Set a pasture above to begin scanning</div>
+      <div class="scan-row">
+        <input id="tagInput" type="text" placeholder="Set pasture first..." disabled autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
+        <button id="addBtn" disabled onclick="addTag()">SCAN</button>
+      </div>
+    </div>
+    <div class="headcount-banner" id="headcountBanner" style="display:none">
+      <div class="headcount-num" id="headcountNum">0</div>
+      <div class="headcount-info">
+        <div class="headcount-label">Head Count</div>
+        <div class="headcount-pasture" id="headcountPasture">—</div>
+        <div class="headcount-target">
+          <label>Target:</label>
+          <input type="number" id="targetInput" placeholder="—" min="1" max="9999" />
+          <span id="completeBadge" class="complete-badge" style="display:none">✓ COMPLETE</span>
+        </div>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="n" id="nTotal">0</div><div class="l">Total Reads</div></div>
+      <div class="stat"><div class="n green" id="nUnique">0</div><div class="l">Unique Tags</div></div>
+      <div class="stat"><div class="n" id="nPasture">0</div><div class="l">Pastures</div></div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Tag EPC</th><th>Pasture</th><th>First Seen / GPS</th><th>Reads</th><th>☁</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BOVINE BEACON -->
+  <div id="bbMode" style="display:none;flex-direction:column;flex:1">
+    <div class="pasture-bar bb-mode">
+      <span class="pasture-label bb">📍 Pasture</span>
+      <input id="bbPastureInput" placeholder="Which pasture?" autocomplete="off" spellcheck="false" style="background:var(--bg);border:2px solid var(--blue);border-radius:8px;color:var(--text);font-family:'Oswald',sans-serif;font-size:1.1rem;font-weight:600;padding:10px 14px;flex:1;min-width:140px;outline:none;min-height:48px;" />
+      <button class="bb-set-btn" onclick="setBBPasture()">SET</button>
+    </div>
+    <div class="bb-target-bar">
+      <span class="bb-target-label">🎯 Find Tag</span>
+      <input id="bbTagInput" placeholder="Enter tag number to find..." autocomplete="off" spellcheck="false" autocapitalize="characters" />
+      <button class="bb-set-btn" onclick="setBeaconTarget()">HUNT</button>
+    </div>
+    <div class="active-bar">
+      <div class="dot idle" id="bbDot"></div>
+      <div class="active-name none" id="bbActiveName">Set pasture and target tag above</div>
+    </div>
+    <input id="bbScanInput" type="text" style="position:absolute;opacity:0;pointer-events:none;left:-9999px;" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
+    <div class="bb-status" id="bbStatus">
+      <div class="bb-status-icon">📡</div>
+      <div class="bb-status-text">Set a target tag to begin hunting</div>
+      <div class="bb-target-display" id="bbTargetDisplay"></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="n" id="bbScanned">0</div><div class="l">Tags Seen</div></div>
+      <div class="stat"><div class="n" id="bbFound" style="color:var(--muted)">—</div><div class="l">Target Found</div></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Tag EPC</th><th>Status</th><th>GPS</th></tr></thead>
+        <tbody id="bbTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="export-bar">
+    <button class="exp pri" onclick="exportCSV()">⬇ CSV</button>
+    <button class="exp" onclick="exportByPasture()">⬇ By Pasture</button>
+    <button class="exp" onclick="exportExcel()">⬇ Excel</button>
+    <button class="exp del" onclick="clearAll()">🗑</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  var CLIENT_ID = '284699934813-85gcnvo9l19qki5ul9ckepgpfg067c7e.apps.googleusercontent.com';
+  var SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+  var YEAR = new Date().getFullYear();
+
+  // Nordic UART Service UUIDs
+  var NORDIC_UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  var NORDIC_UART_RX_CHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // write to device
+  var NORDIC_UART_TX_CHAR = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // receive from device
+
+  // STATE
+  var uniqueTags = {};
+  var currentPasture = '';
+  var filterPasture = 'all';
+  var dayMode = false;
+  var lastGPS = null;
+  var gpsWatcher = null;
+  var accessToken = null;
+  var tokenClient = null;
+  var sheetId = '';
+  var operationName = '';
+  var currentMode = 'hc';
+  var bbTarget = '', bbPasture = '', bbScans = [], bbFound = false, bbActive = false;
+  var audioScanOn = false, audioAlertOn = true, vibOn = true, audioCtx = null;
+  var lastScanTime = {};
+
+  // BLE STATE
+  var bleDevice = null;
+  var bleChar = null;
+  var bleConnected = false;
+  var bleBuffer = '';
+
+  // ── OFFLINE QUEUE ──
+  var QUEUE_KEY = 'hm_offline_queue';
+  function queueLoad() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]'); } catch(e) { return []; } }
+  function queueSave(q) { try { localStorage.setItem(QUEUE_KEY,JSON.stringify(q)); } catch(e){} }
+  function queueAdd(record,mode) { var q=queueLoad(); q.push({record:record,mode:mode,addedAt:Date.now()}); queueSave(q); }
+  function queueRemove(idx) { var q=queueLoad(); q.splice(idx,1); queueSave(q); }
+
+  function flushOfflineQueue() {
+    if(!accessToken||!sheetId) return;
+    function processNext() {
+      var q=queueLoad();
+      if(!q.length){setSheetsBar('ok','✅ All data synced — '+operationName);return;}
+      var item=q[0]; var record=item.record; var mode=item.mode;
+      var tab=mode==='Bovine Beacon'?'Bovine Beacon Log':'Head Count';
+      var row;
+      if(mode==='Bovine Beacon'){
+        row=[[record.date,record.time,record.tag,record.targetTag||'',record.pasture,record.isTarget?'YES':'NO',record.gps?record.gps.lat:'',record.gps?record.gps.lng:'',operationName]];
+      } else {
+        row=[[record.pasture,record.firstDate,record.tag,record.pasture,record.firstTime,
+          record.firstGPS?record.firstGPS.lat:'',
+          record.firstGPS?record.firstGPS.lng:'',
+          record.firstGPS?record.firstGPS.acc:'',
+          record.firstGPS&&record.firstGPS.alt!==null?record.firstGPS.alt:'',
+          record.readCount,'Head Count',operationName,
+          record.weather?record.weather.temp:'',
+          record.weather?record.weather.condition:'',
+          record.weather?record.weather.wind:'',
+          record.weather?record.weather.humidity:'']];
+      }
+      fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(tab)+'!A:L/append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{
+        method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:row})
+      }).then(function(r){
+        if(r.ok){
+          queueRemove(0);
+          var key=record.tag+'__'+record.pasture;
+          if(uniqueTags[key]){uniqueTags[key].synced=true;renderTable();}
+          var remaining=queueLoad().length;
+          setSheetsBar('ok',remaining>0?'✅ Syncing offline — '+remaining+' left':'✅ All data synced — '+operationName);
+          if(remaining>0) setTimeout(processNext,200);
+        }
+      }).catch(function(){});
+    }
+    processNext();
+  }
+
+  // ── CHROME CHECK ──
+  function isChrome() {
+    var ua = navigator.userAgent;
+    return /Chrome/.test(ua) && !/Chromium|Edg|OPR|Brave/.test(ua);
+  }
+
+  // Check for Brave specifically
+  function isBrave() {
+    return navigator.brave && navigator.brave.isBrave;
+  }
+
+  window.copyUrl = function() {
+    var url = window.location.href;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(function() {
+        showToast('URL copied! Open Chrome and paste it.');
+      });
+    } else {
+      // Fallback
+      var el = document.createElement('textarea');
+      el.value = url;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      showToast('URL copied! Open Chrome and paste it.');
+    }
+  };
+
+  window.openInChrome = function() {
+    var url = window.location.href;
+    window.location.href = 'googlechrome://' + url.replace(/^https?:\/\//, '');
+  };
+
+  // ── AUDIO ──
+  function getAudioCtx() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+    return audioCtx;
+  }
+  function playTone(freq, dur, vol, type) {
+    var ctx = getAudioCtx(); if (!ctx) return;
+    try {
+      var o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type=type||'sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(vol,ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+      o.start(ctx.currentTime); o.stop(ctx.currentTime+dur);
+    } catch(e){}
+  }
+  function playScanTick() { if (audioScanOn) playTone(200,0.08,0.15,'sine'); }
+  function playFoundAlert(tagNum) {
+    if (audioAlertOn) {
+      setTimeout(function(){ playTone(440,0.3,0.6,'sine'); },0);
+      setTimeout(function(){ playTone(660,0.5,0.7,'sine'); },300);
+      setTimeout(function(){
+        try {
+          var msg=new SpeechSynthesisUtterance('Tag located. '+tagNum.split('').join(' '));
+          msg.rate=0.85; msg.pitch=0.9; msg.volume=0.9;
+          window.speechSynthesis.speak(msg);
+        } catch(e){}
+      },200);
+    }
+    if (vibOn && navigator.vibrate) navigator.vibrate([200,100,200,100,600]);
+  }
+  function playHeadCountComplete(count) {
+    if (audioAlertOn) {
+      setTimeout(function(){ playTone(523,0.2,0.5,'sine'); },0);
+      setTimeout(function(){ playTone(659,0.2,0.5,'sine'); },200);
+      setTimeout(function(){ playTone(784,0.4,0.6,'sine'); },400);
+      try { var m=new SpeechSynthesisUtterance('Head count complete. '+count+' animals.'); m.rate=0.85; m.volume=0.9; window.speechSynthesis.speak(m); } catch(e){}
+    }
+    if (vibOn && navigator.vibrate) navigator.vibrate([100,50,100,50,500]);
+  }
+  window.toggleAudio = function(type) {
+    if (type==='scan') { audioScanOn=!audioScanOn; var b=document.getElementById('audioScanBtn'); b.textContent=(audioScanOn?'🔊':'🔇')+' Scan Tick'; b.className='audio-btn'+(audioScanOn?' on':''); getAudioCtx(); }
+    else if (type==='alert') { audioAlertOn=!audioAlertOn; var b2=document.getElementById('audioAlertBtn'); b2.textContent=(audioAlertOn?'🔊':'🔇')+' Alert'; b2.className='audio-btn'+(audioAlertOn?' on':''); getAudioCtx(); }
+    else if (type==='vib') { vibOn=!vibOn; var b3=document.getElementById('vibBtn'); b3.textContent=(vibOn?'📳':'📴')+' Vibrate'; b3.className='audio-btn vib'+(vibOn?' on':''); }
+  };
+
+  // ── BLE R6 CONNECTION ──
+  window.connectR6 = async function() {
+    if (!navigator.bluetooth) {
+      showToast('Bluetooth not available — use Chrome', true);
+      return;
+    }
+    if (bleConnected) {
+      // Disconnect
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+      setBleBar('disconnected', '📶 Tap to connect R6 scanner');
+      bleConnected = false;
+      bleDevice = null;
+      bleChar = null;
+      return;
+    }
+    try {
+      setBleBar('scanning', '📶 Searching for R6...');
+      bleDevice = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [NORDIC_UART_SERVICE]
+      });
+      setBleBar('scanning', '📶 Connecting to ' + bleDevice.name + '...');
+      bleDevice.addEventListener('gattserverdisconnected', onBleDisconnected);
+      var server = await bleDevice.gatt.connect();
+      var service = await server.getPrimaryService(NORDIC_UART_SERVICE);
+      bleChar = await service.getCharacteristic(NORDIC_UART_TX_CHAR);
+      await bleChar.startNotifications();
+      bleChar.addEventListener('characteristicvaluechanged', onBleData);
+      bleConnected = true;
+      setBleBar('connected', '📶 R6 Connected — ' + bleDevice.name);
+      document.getElementById('bleDebugPanel').style.display = 'block';
+      showToast('R6 Connected!', false);
+      if (vibOn && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    } catch(e) {
+      setBleBar('disconnected', '📶 Tap to connect R6 scanner');
+      if (e.name !== 'NotFoundError') {
+        showToast('Connection failed: ' + e.message, true);
+      }
+    }
+  };
+
+  function onBleDisconnected() {
+    bleConnected = false;
+    bleDevice = null;
+    bleChar = null;
+    setBleBar('disconnected', '📶 R6 disconnected — tap to reconnect');
+    document.getElementById('bleDebugPanel').style.display = 'none';
+    showToast('R6 disconnected', true);
+  }
+
+  function onBleData(event) {
+    var value = event.target.value;
+    var decoder = new TextDecoder('utf-8');
+    var chunk = decoder.decode(value);
+
+    // ── DEBUG: show raw incoming data on screen ──
+    var debugEl = document.getElementById('bleDebugLog');
+    if (debugEl) {
+      var hex = Array.from(new Uint8Array(value.buffer)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join(' ');
+      var line = document.createElement('div');
+      line.style.cssText = 'font-size:0.65rem;font-family:monospace;border-bottom:1px solid #222;padding:2px 0;word-break:break-all;';
+      line.textContent = 'RAW: ' + JSON.stringify(chunk) + ' | HEX: ' + hex;
+      debugEl.insertBefore(line, debugEl.firstChild);
+      if (debugEl.children.length > 20) debugEl.removeChild(debugEl.lastChild);
+    }
+
+    bleBuffer += chunk;
+    var lines = bleBuffer.split(/[\r\n]+/);
+    bleBuffer = lines.pop();
+    lines.forEach(function(line) {
+      line = line.trim();
+      // Check if line contains RSSI data (format varies by firmware)
+      // Some R6 firmware sends: EPC,RSSI or EPC|-70 or just EPC
+      var rssiMatch = line.match(/,(-\d+)$/) || line.match(/\|(-\d+)$/);
+      if (rssiMatch) {
+        var rssi = parseInt(rssiMatch[1]);
+        if (currentMode === 'bb' && bbActive && !bbFound) {
+          updateRSSIFromBLE(rssi);
+        }
+        line = line.replace(rssiMatch[0], '');
+      }
+      var epc = line.toUpperCase();
+      if (epc) processIncomingTag(epc);
+    });
+  }
+
+  function setBleBar(state, msg) {
+    var el = document.getElementById('bleBar');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'status-bar ble-' + state;
+  }
+
+  // ── PROCESS INCOMING TAG (from BLE or keyboard wedge) ──
+  function processIncomingTag(raw) {
+    if (!isValidCattleTag(raw)) return;
+    if (isDebounceDuplicate(raw)) return;
+    if (currentMode === 'hc') {
+      if (!currentPasture) return;
+      processHCTag(raw);
+    } else if (currentMode === 'bb') {
+      processBBScan(raw);
+    }
+  }
+
+  // EPC VALIDATION
+  function isValidCattleTag(epc) {
+    if (!epc||epc.length<8||epc.length>30) return false;
+    if (!/^[A-Z0-9]+$/.test(epc)) return false;
+    if (/0{10,}/.test(epc)) return false;
+    return true;
+  }
+  function isDebounceDuplicate(epc) {
+    var now=Date.now(), last=lastScanTime[epc]||0;
+    if (now-last<2000) return true;
+    lastScanTime[epc]=now; return false;
+  }
+
+  // SETTINGS
+  function loadLocal() { sheetId=localStorage.getItem('hm_sheet_id')||''; operationName=localStorage.getItem('hm_operation')||''; }
+  function saveLocal(sid, opName) { localStorage.setItem('hm_sheet_id',sid); localStorage.setItem('hm_operation',opName); sheetId=sid; operationName=opName; }
+
+  // SCREENS
+  function showScreen(id) {
+    ['chromeScreen','loginScreen','onboardScreen','appScreen'].forEach(function(s){
+      var el=document.getElementById(s);
+      el.className = s===id ? 'screen show' : 'screen';
+      if (s==='loginScreen'||s==='chromeScreen') { el.style.alignItems='center'; el.style.justifyContent='center'; el.style.padding='30px'; }
+      if (s==='onboardScreen') { el.style.alignItems='center'; el.style.justifyContent='center'; el.style.padding='24px'; }
+    });
+  }
+
+  // MODE SWITCH
+  window.switchMode=function(mode){
+    currentMode=mode;
+    document.getElementById('tabHC').className='mode-tab'+(mode==='hc'?' active-hc':'');
+    document.getElementById('tabBB').className='mode-tab'+(mode==='bb'?' active-bb':'');
+    document.getElementById('hcMode').style.display=mode==='hc'?'block':'none';
+    document.getElementById('bbMode').style.display=mode==='bb'?'flex':'none';
+  };
+
+  // GPS
+  function startGPS() {
+    if (!navigator.geolocation){setGPSBar('err','📡 GPS not available');return;}
+    setGPSBar('searching','📡 Acquiring GPS...');
+    if (gpsWatcher!==null) navigator.geolocation.clearWatch(gpsWatcher);
+    gpsWatcher=navigator.geolocation.watchPosition(
+      function(pos){
+        lastGPS={
+          lat:pos.coords.latitude.toFixed(6),
+          lng:pos.coords.longitude.toFixed(6),
+          acc:Math.round(pos.coords.accuracy),
+          alt:pos.coords.altitude ? Math.round(pos.coords.altitude) : null,
+          altAcc:pos.coords.altitudeAccuracy ? Math.round(pos.coords.altitudeAccuracy) : null
+        };
+        setGPSBar('ok','📡 GPS +/-'+lastGPS.acc+'m — '+lastGPS.lat+', '+lastGPS.lng+(lastGPS.alt!==null?' | '+lastGPS.alt+'m elev':''));
+      },
+      function(err){ lastGPS=null; setGPSBar('err',err.code===1?'📡 GPS blocked':'📡 GPS unavailable — tap to retry'); },
+      {enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+    );
+  }
+  function setGPSBar(state,msg){var el=document.getElementById('gpsBar');if(!el)return;el.textContent=msg;el.className='status-bar gps-'+state;}
+  window.retryGPS=function(){startGPS();};
+
+  // AUTH
+  window.signIn=function(){if(tokenClient)tokenClient.requestAccessToken({prompt:''});else showToast('Loading...');};
+  window.signOut=function(){
+    if(accessToken){google.accounts.oauth2.revoke(accessToken,function(){});accessToken=null;}
+    if(bleDevice&&bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+    uniqueTags={};lastScanTime={};bbScans=[];
+    showScreen('loginScreen');
+  };
+  function onSignedIn() {
+    loadLocal();
+    if (sheetId&&operationName) launchApp();
+    else showScreen('onboardScreen');
+  }
+  function launchApp() {
+    document.getElementById('operationName').textContent=operationName;
+    showScreen('appScreen');
+    startGPS();
+    setSheetsBar('ok','✅ Connected — '+operationName);
+    renderSavedPastures();
+    flushOfflineQueue();
+    setInterval(flushOfflineQueue, 30000);
+  }
+
+  // CREATE WORKSPACE
+  window.createWorkspace = function() {
+    var opName=document.getElementById('operationInput').value.trim();
+    if(!opName){showToast('Enter your operation name',true);return;}
+    operationName=opName;
+    var btn=document.getElementById('onboardBtn');
+    btn.disabled=true; btn.textContent='Setting up...';
+    document.getElementById('onboardProgress').style.display='block';
+    var sheetTitle='HerdMate — '+opName+' '+YEAR;
+    setStep('stepCreate','active','⏳ Creating your Google Sheet...');
+    fetch('https://sheets.googleapis.com/v4/spreadsheets',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        properties:{title:sheetTitle},
+        sheets:[
+          {properties:{title:'Head Count',index:0}},
+          {properties:{title:'Bovine Beacon Log',index:1}},
+          {properties:{title:'Animals',index:2}}
+        ]
+      })
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data.spreadsheetId) throw new Error('Sheet creation failed');
+      sheetId=data.spreadsheetId;
+      setStep('stepCreate','done','✅ Google Sheet created');
+      setStep('stepTab','done','✅ Tabs created');
+      setStep('stepHeaders','active','⏳ Writing column headers...');
+      return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values:batchUpdate',{
+        method:'POST',
+        headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({
+          valueInputOption:'RAW',
+          data:[
+            {range:'Head Count!A1:P1',values:[['Session','Date','Tag EPC','Pasture','First Seen','Latitude','Longitude','GPS Accuracy (m)','Elevation (m)','Read Count','Mode','Operation','Temperature','Conditions','Wind','Humidity']]},
+            {range:'Bovine Beacon Log!A1:I1',values:[['Date','Time','Tag EPC','Target Tag','Pasture','Found','Latitude','Longitude','Operation']]},
+            {range:'Animals!A1:H1',values:[['Tag EPC','Animal ID','Sex','Breed','DOB','Dam Tag','Sire Tag','Notes']]}
+          ]
+        })
+      });
+    })
+    .then(function(r){
+      if(!r.ok) throw new Error('Header write failed');
+      setStep('stepHeaders','done','✅ Headers written');
+      setStep('stepDone','active','⏳ Finalizing...');
+      saveLocal(sheetId,operationName);
+      setTimeout(function(){setStep('stepDone','done','✅ HerdMate workspace ready!');setTimeout(function(){launchApp();},800);},500);
+    })
+    .catch(function(err){
+      btn.disabled=false; btn.textContent='Set Up My HerdMate →';
+      showToast('Setup failed — check connection',true);
+    });
+  };
+  function setStep(id,state,text){var el=document.getElementById(id);if(!el)return;el.textContent=text;el.className='step '+state;}
+
+  // SHEETS
+  function setSheetsBar(state,msg){var el=document.getElementById('sheetsBar');if(!el)return;el.textContent=msg;el.className='status-bar sheets-'+state;}
+  function writeToSheet(record, mode) {
+    if(!accessToken||!sheetId){record.synced=false;queueAdd(record,mode);renderTable();return;}
+    var tab=mode==='Bovine Beacon'?'Bovine Beacon Log':'Head Count';
+    var row;
+    if(mode==='Bovine Beacon'){
+      row=[[record.date,record.time,record.tag,bbTarget,record.pasture,record.isTarget?'YES':'NO',record.gps?record.gps.lat:'',record.gps?record.gps.lng:'',operationName]];
+    } else {
+      row=[[record.pasture,record.firstDate,record.tag,record.pasture,record.firstTime,
+        record.firstGPS?record.firstGPS.lat:'',
+        record.firstGPS?record.firstGPS.lng:'',
+        record.firstGPS?record.firstGPS.acc:'',
+        record.firstGPS&&record.firstGPS.alt!==null?record.firstGPS.alt:'',
+        record.readCount,'Head Count',operationName,
+        record.weather?record.weather.temp:'',
+        record.weather?record.weather.condition:'',
+        record.weather?record.weather.wind:'',
+        record.weather?record.weather.humidity:'']];
+    }
+    fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(tab)+'!A:L/append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{
+      method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:row})
+    }).then(function(r){
+      if(r.ok){
+        if(record.synced!==undefined){record.synced=true;renderTable();}
+        setSheetsBar('ok','✅ Synced — '+operationName);
+      } else {
+        if(record.synced!==undefined){record.synced=false;renderTable();}
+        queueAdd(record,mode);
+        setSheetsBar('err','❌ Sync failed — saved offline');
+      }
+    }).catch(function(){
+      if(record.synced!==undefined){record.synced=false;renderTable();}
+      queueAdd(record,mode);
+      setSheetsBar('err','❌ Offline — saved to device');
+    });
+  }
+
+  // ── UPDATE WEATHER ON EXISTING SHEET ROW ──
+  // After initial write, if weather arrives we append a corrected row.
+  // The original row stays; this adds a second updated row with weather filled in.
+  function updateSheetWeather(record) {
+    if (!accessToken || !sheetId || !record.weather) return;
+    var tab = 'Head Count';
+    var row = [[record.pasture, record.firstDate, record.tag, record.pasture, record.firstTime,
+      record.firstGPS ? record.firstGPS.lat : '',
+      record.firstGPS ? record.firstGPS.lng : '',
+      record.firstGPS ? record.firstGPS.acc : '',
+      record.firstGPS && record.firstGPS.alt !== null ? record.firstGPS.alt : '',
+      record.readCount, 'Head Count', operationName,
+      record.weather.temp,
+      record.weather.condition,
+      record.weather.wind,
+      record.weather.humidity]];
+    fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + '/values/' + encodeURIComponent(tab) + '!A:L/append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: row })
+    }).catch(function() {}); // silent — weather row is best-effort
+  }
+
+  // DAY/NIGHT  window.toggleMode=function(){dayMode=!dayMode;document.getElementById('app').className=dayMode?'day':'';document.getElementById('modeBtn').textContent=dayMode?'🌙':'☀️';};
+
+  // HEAD COUNT
+  document.getElementById('pastureInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();setPasture();}});
+  document.getElementById('tagInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addTag();}});
+  document.getElementById('targetInput').addEventListener('input',function(){updateHeadcountBanner();});
+
+  window.setPasture=function(){
+    var name=document.getElementById('pastureInput').value.trim();
+    if(!name){showToast('Enter a pasture name',true);return;}
+    currentPasture=name;
+    document.getElementById('pastureInput').value='';
+    document.getElementById('activeName').textContent=name;
+    document.getElementById('activeName').className='active-name';
+    document.getElementById('scanDot').className='dot blink';
+    document.getElementById('scanHint').textContent='Ready — scanning: '+name;
+    document.getElementById('scanHint').className='scan-hint';
+    document.getElementById('tagInput').disabled=false;
+    document.getElementById('tagInput').placeholder='Scan or type EPC tag...';
+    document.getElementById('addBtn').disabled=false;
+    document.getElementById('headcountBanner').style.display='flex';
+    document.getElementById('headcountPasture').textContent=name;
+    document.getElementById('headcountNum').textContent='0';
+    document.getElementById('completeBadge').style.display='none';
+    document.getElementById('headcountBanner').className='headcount-banner';
+    document.getElementById('tagInput').focus();
+    showToast('Pasture: '+name);
+    renderTabs();
+  };
+
+  window.addTag=function(){
+    var raw=document.getElementById('tagInput').value.trim().toUpperCase();
+    if(!raw||!currentPasture)return;
+    document.getElementById('tagInput').value='';
+    processIncomingTag(raw);
+    document.getElementById('tagInput').focus();
+  };
+
+  function processHCTag(raw) {
+    playScanTick();
+    var now=new Date();
+    var timeStr=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var dateStr=now.toLocaleDateString();
+    var gps=lastGPS?{lat:lastGPS.lat,lng:lastGPS.lng,acc:lastGPS.acc,alt:lastGPS.alt,altAcc:lastGPS.altAcc}:null;
+    var key=raw+'__'+currentPasture;
+    if(uniqueTags[key]){
+      uniqueTags[key].readCount++;
+      uniqueTags[key].lastTime=timeStr;
+      renderTable();updateStats();updateHeadcountBanner();
+    } else {
+      var record={tag:raw,pasture:currentPasture,firstTime:timeStr,firstDate:dateStr,lastTime:timeStr,firstGPS:gps,readCount:1,synced:null,weather:null};
+      uniqueTags[key]=record;
+      var zone=document.getElementById('scanZone');
+      zone.className='scan-zone lit';
+      setTimeout(function(){zone.className='scan-zone';},350);
+      renderTable();renderTabs();updateStats();updateHeadcountBanner();
+      showToast('NEW: '+raw);
+      // Write to sheet immediately with whatever we have
+      // Then fetch weather and update the record display
+      writeToSheet(record, 'Head Count');
+      if (gps) {
+        fetchWeather(gps.lat, gps.lng, function(weather) {
+          record.weather = weather;
+          renderTable();
+          // Write a second row update with weather data appended
+          updateSheetWeather(record);
+        });
+      }
+    }
+  }
+
+  function updateHeadcountBanner(){
+    var keys=Object.keys(uniqueTags).filter(function(k){return uniqueTags[k].pasture===currentPasture;});
+    var count=keys.length;
+    document.getElementById('headcountNum').textContent=count;
+    var target=parseInt(document.getElementById('targetInput').value)||0;
+    var banner=document.getElementById('headcountBanner');
+    var badge=document.getElementById('completeBadge');
+    if(target>0&&count>=target&&count>0){
+      if(banner.className!=='headcount-banner complete'){
+        banner.className='headcount-banner complete';
+        badge.style.display='inline-block';
+        playHeadCountComplete(count);
+      }
+    } else {banner.className='headcount-banner';badge.style.display='none';}
+  }
+
+  // BOVINE BEACON
+  document.getElementById('bbPastureInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();setBBPasture();}});
+  document.getElementById('bbTagInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();setBeaconTarget();}});
+  document.getElementById('bbScanInput').addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();var v=document.getElementById('bbScanInput').value.trim().toUpperCase();document.getElementById('bbScanInput').value='';if(v)processBBScan(v);}
+  });
+
+  window.setBBPasture=function(){bbPasture=document.getElementById('bbPastureInput').value.trim();if(!bbPasture){showToast('Enter pasture',true);return;}showToast('BB Pasture: '+bbPasture);};
+  window.setBeaconTarget=function(){
+    var t=document.getElementById('bbTagInput').value.trim().toUpperCase();
+    if(!t){showToast('Enter a tag to find',true);return;}
+    bbTarget=t;bbFound=false;bbActive=true;bbScans=[];
+    document.getElementById('bbScanned').textContent='0';
+    document.getElementById('bbFound').textContent='—';
+    document.getElementById('bbFound').style.color='var(--muted)';
+    document.getElementById('bbDot').className='dot blink-blue';
+    document.getElementById('bbActiveName').textContent='Hunting: '+t;
+    document.getElementById('bbActiveName').className='active-name blue';
+    document.getElementById('bbStatus').className='bb-status searching';
+    document.getElementById('bbStatus').innerHTML='<div class="bb-status-icon">🔍</div><div class="bb-status-text">Scanning... searching for tag</div><div class="bb-target-display">Target: '+esc(t)+'</div>';
+    renderBBTable();
+    showToast('Bovine Beacon active','blue');
+    if (vibOn) startJawsHaptics();
+  };
+
+  function processBBScan(raw){
+    if(!bbActive||!raw)return;
+    if(!isValidCattleTag(raw))return;
+    if(isDebounceDuplicate('bb_'+raw))return;
+    var now=new Date();
+    var timeStr=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var dateStr=now.toLocaleDateString();
+    var gps=lastGPS?{lat:lastGPS.lat,lng:lastGPS.lng,acc:lastGPS.acc}:null;
+    var isTarget=raw===bbTarget;
+    var scanRecord={tag:raw,time:timeStr,date:dateStr,isTarget:isTarget,gps:gps,pasture:bbPasture};
+    bbScans.unshift(scanRecord);
+    document.getElementById('bbScanned').textContent=bbScans.length;
+    writeToSheet(scanRecord,'Bovine Beacon');
+    if(isTarget&&!bbFound){
+      bbFound=true;
+      stopJawsHaptics();
+      document.getElementById('bbStatus').className='bb-status found';
+      document.getElementById('bbStatus').innerHTML='<div class="bb-status-icon">✅</div><div class="bb-status-text">ANIMAL LOCATED!</div><div class="bb-target-display">'+esc(raw)+(gps?'<br>📍 '+gps.lat+', '+gps.lng:'')+'</div>';
+      document.getElementById('bbDot').className='dot blink';
+      document.getElementById('bbActiveName').textContent='FOUND: '+raw;
+      document.getElementById('bbActiveName').className='active-name';
+      document.getElementById('bbFound').textContent='YES';
+      document.getElementById('bbFound').style.color='var(--green)';
+      playFoundAlert(raw);
+      showToast('🎯 FOUND: '+raw,'good');
+    } else if(!isTarget){playScanTick();}
+    renderBBTable();
+  }
+
+  function renderBBTable(){
+    var tbody=document.getElementById('bbTbody');
+    if(!bbScans.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted)">No scans yet</td></tr>';return;}
+    tbody.innerHTML=bbScans.map(function(s){
+      var gpsHtml=s.gps?'<span class="gps-line ok">📍 '+s.gps.lat+', '+s.gps.lng+'</span>':'<span class="gps-line">No GPS</span>';
+      return '<tr class="'+(s.isTarget?'found-row':'')+'"><td style="font-size:.78rem;color:var(--muted)">'+s.time+'</td><td class="tag-id">'+esc(s.tag)+'</td><td>'+(s.isTarget?'<span style="color:var(--green);font-weight:700;font-family:Oswald,sans-serif">🎯 TARGET</span>':'<span style="color:var(--muted);font-size:.78rem">—</span>')+'</td><td>'+gpsHtml+'</td></tr>';
+    }).join('');
+  }
+
+  window.setFilter=function(name){filterPasture=name;renderTable();renderTabs();};
+  function renderTabs(){
+    var pastures=[];
+    Object.keys(uniqueTags).forEach(function(k){var p=uniqueTags[k].pasture;if(pastures.indexOf(p)===-1)pastures.push(p);});
+    var el=document.getElementById('tabs');
+    var total=Object.keys(uniqueTags).length;
+    if(!pastures.length){el.innerHTML='';return;}
+    var h='<div class="tab '+(filterPasture==='all'?'on':'')+'" onclick="setFilter(\'all\')">All <span class="cnt">'+total+'</span></div>';
+    pastures.forEach(function(p){
+      var cnt=Object.keys(uniqueTags).filter(function(k){return uniqueTags[k].pasture===p;}).length;
+      h+='<div class="tab '+(filterPasture===p?'on':'')+'" onclick="setFilter(\''+p.replace(/'/g,'')+'\')">'+esc(p)+' <span class="cnt">'+cnt+'</span></div>';
+    });
+    el.innerHTML=h;
+  }
+
+  function renderTable(){
+    var tbody=document.getElementById('tbody');
+    var keys=Object.keys(uniqueTags);
+    var filtered=filterPasture==='all'?keys:keys.filter(function(k){return uniqueTags[k].pasture===filterPasture;});
+    if(!filtered.length){
+      tbody.innerHTML='<tr><td colspan="6"><div style="text-align:center;padding:48px 20px;color:var(--muted)"><div style="font-size:2.8rem;margin-bottom:12px;opacity:.4">🐄</div><p style="font-size:.9rem;line-height:1.6">'+(keys.length===0?'Set a pasture and start scanning.<br>One row per animal.':'No tags in this pasture yet.')+'</p></div></td></tr>';
+      return;
+    }
+    var rows='';
+    filtered.forEach(function(k,i){
+      var r=uniqueTags[k];
+      var gpsHtml=r.firstGPS
+        ?'<span class="gps-line ok">📍 '+r.firstGPS.lat+', '+r.firstGPS.lng+' (±'+r.firstGPS.acc+'m)'+(r.firstGPS.alt!==null?' | '+r.firstGPS.alt+'m':'')+'</span>'
+        :'<span class="gps-line">No GPS</span>';
+      var weatherHtml=r.weather
+        ?'<span class="gps-line ok">🌤 '+r.weather.temp+' · '+r.weather.condition+'</span>'
+        :(r.firstGPS?'<span class="gps-line" style="color:#555">⏳ fetching weather...</span>':'');
+      var syncHtml=r.synced===null?'<span style="color:var(--orange);font-size:.8rem">⏳</span>':r.synced?'<span style="color:var(--green);font-size:.8rem">✅</span>':'<span style="color:var(--red);font-size:.75rem">⚠️</span>';
+      rows+='<tr class="'+(i===0?'flash':'')+'"><td style="color:var(--muted);font-size:.75rem">'+(filtered.length-i)+'</td><td class="tag-id">'+esc(r.tag)+'</td><td><span class="chip">'+esc(r.pasture)+'</span></td><td><span style="font-size:.82rem">'+r.firstTime+'</span>'+gpsHtml+'</td><td><span class="read-count">'+r.readCount+'x</span></td><td>'+syncHtml+'</td></tr>';
+    });
+    tbody.innerHTML=rows;
+  }
+
+  function updateStats(){
+    var total=0;Object.keys(uniqueTags).forEach(function(k){total+=uniqueTags[k].readCount;});
+    document.getElementById('nTotal').textContent=total;
+    document.getElementById('nUnique').textContent=Object.keys(uniqueTags).length;
+    var p={};Object.keys(uniqueTags).forEach(function(k){p[uniqueTags[k].pasture]=1;});
+    document.getElementById('nPasture').textContent=Object.keys(p).length;
+  }
+
+  window.clearAll=function(){
+    if(!Object.keys(uniqueTags).length&&!bbScans.length)return;
+    if(!confirm('Clear scan data?\n\nData already synced to Google Sheets is kept there.'))return;
+    uniqueTags={};lastScanTime={};bbScans=[];filterPasture='all';bbFound=false;bbActive=false;bbTarget='';
+    document.getElementById('headcountBanner').style.display='none';
+    stopJawsHaptics();
+    document.getElementById('bbStatus').className='bb-status';
+    document.getElementById('bbStatus').innerHTML='<div class="bb-status-icon">📡</div><div class="bb-status-text">Set a target tag to begin hunting</div>';
+    renderTable();renderTabs();updateStats();renderBBTable();
+  };
+
+  // EXPORTS
+  var HEADERS=['#','Tag EPC','Pasture','Date','First Seen','Latitude','Longitude','GPS Acc(m)','Read Count'];
+  function getRows(keys){var rows=[HEADERS];keys.forEach(function(k,i){var r=uniqueTags[k];rows.push([i+1,r.tag,r.pasture,r.firstDate,r.firstTime,r.firstGPS?r.firstGPS.lat:'',r.firstGPS?r.firstGPS.lng:'',r.firstGPS?r.firstGPS.acc:'',r.readCount]);});return rows;}
+  window.exportCSV=function(){if(!Object.keys(uniqueTags).length){showToast('No data');return;}var rows=getRows(Object.keys(uniqueTags));dl('herdmate-headcount.csv','text/csv',rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n'));showToast('CSV exported!');};
+  window.exportByPasture=function(){
+    if(!Object.keys(uniqueTags).length){showToast('No data');return;}
+    var ps=[];Object.keys(uniqueTags).forEach(function(k){var p=uniqueTags[k].pasture;if(ps.indexOf(p)===-1)ps.push(p);});
+    var csv='';
+    ps.forEach(function(p){var keys=Object.keys(uniqueTags).filter(function(k){return uniqueTags[k].pasture===p;});csv+='"PASTURE: '+p+' — '+keys.length+' animals"\n'+HEADERS.map(function(h){return '"'+h+'"';}).join(',')+'\n';keys.forEach(function(k,i){var r=uniqueTags[k];csv+='"'+(i+1)+'","'+r.tag+'","'+r.pasture+'","'+r.firstDate+'","'+r.firstTime+'","'+(r.firstGPS?r.firstGPS.lat:'')+'","'+(r.firstGPS?r.firstGPS.lng:'')+'","'+(r.firstGPS?r.firstGPS.acc:'')+'","'+r.readCount+'"\n';});csv+='\n';});
+    dl('herdmate-by-pasture.csv','text/csv',csv);showToast('Exported by pasture!');
+  };
+  window.exportExcel=function(){if(!Object.keys(uniqueTags).length){showToast('No data');return;}var rows=getRows(Object.keys(uniqueTags));dl('herdmate-headcount.xls','application/vnd.ms-excel',rows.map(function(r){return r.join('\t');}).join('\n'));showToast('Excel exported!');};
+  function dl(name,type,content){var b=new Blob([content],{type:type});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();}
+
+  function showToast(msg,type){
+    var t=document.getElementById('toast');
+    t.textContent=msg;
+    t.className='toast '+(type==='blue'?'blue':type==='good'?'good':type===true||type==='warn'?'warn':'')+' show';
+    clearTimeout(t._timer);
+    t._timer=setTimeout(function(){t.className='toast'+(type==='blue'?' blue':type==='good'?' good':type===true||type==='warn'?' warn':'');},2500);
+  }
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  // ── WEATHER ──
+  var lastWeather = null;
+  var lastWeatherFetch = 0;
+  var lastWeatherCoords = null;
+  var WEATHER_CACHE_MS = 5 * 60 * 1000; // cache 5 minutes
+
+  function fetchWeather(lat, lng, callback) {
+    var now = Date.now();
+    if (lastWeather && (now - lastWeatherFetch) < WEATHER_CACHE_MS) {
+      callback(lastWeather);
+      return;
+    }
+    fetch('https://weather.herdmate.ag/weather?lat=' + lat + '&lng=' + lng)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.temp) throw new Error('No weather data');
+      lastWeather = data;
+      lastWeatherFetch = Date.now();
+      callback(data);
+    })
+    .catch(function() { callback(null); });
+  }
+
+  // ── JAWS HAPTICS ──
+  var jawsInterval = null;
+  var jawsRSSI = -80; // default weak signal
+
+  function startJawsHaptics() {
+    stopJawsHaptics();
+    updateJawsHaptics();
+  }
+
+  function stopJawsHaptics() {
+    if (jawsInterval) { clearTimeout(jawsInterval); jawsInterval = null; }
+    if (navigator.vibrate) navigator.vibrate(0);
+  }
+
+  function updateJawsHaptics() {
+    // RSSI typically -30 (very close) to -90 (very far)
+    // Map to pulse speed: close = fast, far = slow
+    var rssi = jawsRSSI;
+    var normalized = Math.max(0, Math.min(1, (rssi + 90) / 60)); // 0=far, 1=close
+    var pauseMs = Math.round(1500 - (normalized * 1200)); // 1500ms far, 300ms close
+    var pulseMs = Math.round(150 + (normalized * 100)); // shorter pulse when close
+
+    if (navigator.vibrate) {
+      // Dun-Dun pattern
+      navigator.vibrate([pulseMs, 80, pulseMs]);
+    }
+
+    jawsInterval = setTimeout(function() {
+      if (bbActive && !bbFound) {
+        updateJawsHaptics();
+      }
+    }, pauseMs + pulseMs * 2 + 80);
+  }
+
+  function updateRSSIFromBLE(rssiValue) {
+    jawsRSSI = rssiValue || -80;
+  }
+
+  // ── ROTATION LOCK ──
+  var rotationLocked = false;
+  window.toggleRotation = function() {
+    if (!screen.orientation || !screen.orientation.lock) {
+      showToast('Rotation lock not supported on this device', true);
+      return;
+    }
+    if (rotationLocked) {
+      screen.orientation.unlock();
+      rotationLocked = false;
+      document.getElementById('lockBtn').textContent = '🔄';
+      document.getElementById('lockBtn').style.borderColor = '';
+      showToast('Screen rotation unlocked');
+    } else {
+      var orientation = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
+      screen.orientation.lock(orientation).then(function() {
+        rotationLocked = true;
+        document.getElementById('lockBtn').textContent = '🔒';
+        document.getElementById('lockBtn').style.borderColor = 'var(--orange)';
+        showToast('Screen rotation locked');
+      }).catch(function() {
+        showToast('Could not lock rotation', true);
+      });
+    }
+  };
+
+  // ── SAVED PASTURES ──
+  var PASTURES_KEY = 'hm_saved_pastures';
+
+  function savedPasturesLoad() {
+    try { return JSON.parse(localStorage.getItem(PASTURES_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function savedPasturesSave(list) {
+    try { localStorage.setItem(PASTURES_KEY, JSON.stringify(list)); } catch(e) {}
+  }
+
+  function renderSavedPastures() {
+    var list = savedPasturesLoad();
+    var el = document.getElementById('savedPasturesList');
+    if (!el) return;
+    if (!list.length) {
+      el.innerHTML = '<span style="font-size:0.72rem;color:var(--muted);font-style:italic;">None saved — tap Edit to add</span>';
+      return;
+    }
+    el.innerHTML = list.map(function(p, i) {
+      return '<button onclick="quickSetPasture(' + i + ')" style="background:var(--orange-dim);border:1px solid var(--orange-muted);border-radius:6px;color:var(--orange);font-family:Oswald,sans-serif;font-size:0.75rem;font-weight:600;padding:5px 10px;cursor:pointer;min-height:30px;white-space:nowrap;">' +
+        esc(p.name) + (p.target ? ' <span style="opacity:0.7;font-size:0.65rem;">(' + p.target + ')</span>' : '') +
+        '</button>';
+    }).join('');
+  }
+
+  window.quickSetPasture = function(idx) {
+    var list = savedPasturesLoad();
+    var p = list[idx];
+    if (!p) return;
+    document.getElementById('pastureInput').value = p.name;
+    if (p.target) document.getElementById('targetInput').value = p.target;
+    setPasture();
+    if (p.target) updateHeadcountBanner();
+  };
+
+  window.showPastureManager = function() {
+    var list = savedPasturesLoad();
+    var existing = document.getElementById('pastureManagerModal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'pastureManagerModal';
+    overlay.onclick = function(e) { if (e.target === overlay) closePastureManager(); };
+
+    var sheet = document.createElement('div');
+    sheet.className = 'modal-sheet';
+
+    function buildRows() {
+      var current = savedPasturesLoad();
+      return current.map(function(p, i) {
+        return '<div class="pasture-item" id="pitem_' + i + '">' +
+          '<div style="flex:1">' +
+            '<div class="pasture-item-label">Pasture Name</div>' +
+            '<input type="text" value="' + esc(p.name) + '" id="pname_' + i + '" placeholder="Pasture name" />' +
+          '</div>' +
+          '<div style="width:70px">' +
+            '<div class="pasture-item-label">Target</div>' +
+            '<input type="number" value="' + (p.target || '') + '" id="ptarget_' + i + '" placeholder="—" class="target-input" min="1" max="9999" />' +
+          '</div>' +
+          '<button class="del-pasture" onclick="deletePastureItem(' + i + ')">🗑</button>' +
+        '</div>';
+      }).join('');
+    }
+
+    sheet.innerHTML =
+      '<button class="modal-close" onclick="closePastureManager()">✕</button>' +
+      '<div class="modal-title">📍 Saved Pastures</div>' +
+      '<div class="modal-desc">Tap a pasture to set it instantly. Edit names and target head counts here.</div>' +
+      '<div id="pastureItemsList">' + buildRows() + '</div>' +
+      '<button class="modal-add-btn" onclick="addPastureItem()">+ Add Pasture</button>' +
+      '<button class="modal-save-btn" onclick="savePastureManager()">Save Pastures</button>';
+
+    overlay.appendChild(sheet);
+    document.body.appendChild(overlay);
+  };
+
+  window.addPastureItem = function() {
+    var list = savedPasturesLoad();
+    list.push({ name: '', target: '' });
+    savedPasturesSave(list);
+    showPastureManager();
+  };
+
+  window.deletePastureItem = function(idx) {
+    var list = savedPasturesLoad();
+    list.splice(idx, 1);
+    savedPasturesSave(list);
+    showPastureManager();
+  };
+
+  window.savePastureManager = function() {
+    var list = savedPasturesLoad();
+    var newList = [];
+    list.forEach(function(p, i) {
+      var nameEl = document.getElementById('pname_' + i);
+      var targetEl = document.getElementById('ptarget_' + i);
+      if (nameEl && nameEl.value.trim()) {
+        newList.push({
+          name: nameEl.value.trim(),
+          target: targetEl ? (parseInt(targetEl.value) || '') : ''
+        });
+      }
+    });
+    savedPasturesSave(newList);
+    closePastureManager();
+    renderSavedPastures();
+    showToast('Pastures saved!');
+  };
+
+  window.closePastureManager = function() {
+    var el = document.getElementById('pastureManagerModal');
+    if (el) el.remove();
+  };
+
+  // INIT
+  window.addEventListener('load', function() {
+    // Set URL display on chrome screen
+    var urlEl = document.getElementById('currentUrl');
+    if (urlEl) urlEl.textContent = window.location.href;
+
+    // Check browser
+    var brave = !!(navigator.brave && navigator.brave.isBrave);
+    if (brave || !isChrome()) {
+      showScreen('chromeScreen');
+      return;
+    }
+
+    // Keyboard enter on onboard
+    var oi=document.getElementById('operationInput');
+    if(oi) oi.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();createWorkspace();}});
+
+    var check=setInterval(function(){
+      if(window.google&&window.google.accounts){
+        clearInterval(check);
+        tokenClient=google.accounts.oauth2.initTokenClient({
+          client_id:CLIENT_ID,
+          scope:SCOPES,
+          callback:function(response){
+            if(response.error){showToast('Sign in failed',true);return;}
+            accessToken=response.access_token;
+            localStorage.setItem('hm_google_token', response.access_token);
+            fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers:{Authorization:'Bearer '+response.access_token}
+            }).then(function(r){return r.json();}).then(function(info){
+              if(info.email) localStorage.setItem('hm_user_email', info.email);
+            });
+            onSignedIn();
+          }
+        });
+        // Show login
+        showScreen('loginScreen');
+      }
+    },200);
+  });
+
+  renderTable();
+  renderBBTable();
+})();
+</script>
 </body>
 </html>
