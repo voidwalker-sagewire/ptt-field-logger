@@ -13,3 +13,6 @@ I usually do not have goals other than it works.
                
 6/14/2026 1527 Things were moving quite well,until I rewrote the Index.html file wite a different app, now the transcription service seems disconnected from app.
                I need to just put it back together with a/the file from ChatGPT or put the correct version back up from GitHub deployments. 
+6/14/2026 1737 I have run out of messages until 1850 with Claude. I built the Weather Service and was trying to fix the Tag Reaper tm app so it works with the Chainway R6 Sled and C72 hand held RFID readers.
+               Now I'm going g to fix the Headset App to work on the same Droplet Server as HerdMate Weather Service. The transcription service seems to be working fine its just gummed up on the server, so,
+               it's getting restructured. 
