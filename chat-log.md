@@ -318,3 +318,59 @@ But before any of that?
 Take the win.
 
 You just proved the entire pipeline works. 🚜🎤🤖
+
+
+
+13JUN26 2248
+
+Yes. This is the shape of it.
+
+What you just described is bigger than a recorder:
+
+Moment happens
+↓
+PTT / VOX / ON-OFF capture
+↓
+Audio saved
+↓
+Transcript created
+↓
+Transcript parsed into entries
+↓
+Entries stored with timestamp / GPS / weather
+↓
+Searchable memory / RAG / query engine
+
+The next real build should be:
+
+v0.4.0 — Entry Parser
+
+After transcription, the app creates:
+
+{
+  "entry_type": "field_note",
+  "raw_transcript": "...",
+  "summary": "...",
+  "tags": ["headset", "transcription", "idea"],
+  "timestamp": "...",
+  "source": "PTT headset",
+  "audio_file": "ptt-0005.webm"
+}
+
+That is the bridge between “recording messages” and “AI Headset Assistant.”
+
+And yes — headset variety matters. 3M is proof hardware. Later you test:
+
+Big headset
+small earbud
+neckband mic
+helmet mounted
+vehicle mic
+watch/phone PTT
+
+Tonight’s project note should be:
+
+6/13/2026 2230
+Transcription working. PTT headset pipeline proven.
+Next: parse transcripts into useful entries.
+
