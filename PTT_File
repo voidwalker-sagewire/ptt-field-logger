@@ -2,3 +2,7 @@ v0.1
 ✓ Connect headset
 ✓ Detect PTT
 ✓ Log press/release
+
+6/13/2026 2230
+Transcription working. PTT headset pipeline proven.
+Next: parse transcripts into useful entries.
