@@ -5,3 +5,7 @@ This project is being developed by ChatGPT and Mike Miller as a fun, educational
 I usually do not have goals other than it works.
 6/12/2026 0934 I wonder if I can talk/hear 2 devices at same time.
 6/13/2026 0529 Today we set up transcription on one of my Droplet server. Used Termux, my Tab S7, and ChatGPT.
+6/13/2026 2230 Transcription is now working. 
+               I'm thinking about making an AI Headset Assistant.  RAG memory, Summary, raw text, audio file stored onto Google Drive/Cloud storage. Query Engine. 
+               All events logged into Google Sheets, timestamp, gps stamp, weather stamp.
+               Maybe add photos and file from app, like shop manuals, cookbooks, transcripts, scripts, etc. Modes - PTT, VOX, ON/OFF.
