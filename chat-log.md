@@ -1,3 +1,214 @@
+I'd put something like this into either your README, a changelog, or your Notes file.
+
+
+---
+
+PTT Field Logger – Development Log
+
+June 14, 2026
+
+Major Milestone Reached
+
+Today the PTT Field Logger successfully moved from a local prototype to a publicly deployed web application.
+
+The application is now hosted at:
+
+https://headset.herdmate.ag
+
+Infrastructure Completed
+
+GitHub repository connected to Coolify
+
+Automatic deployments from GitHub
+
+Docker container successfully built and deployed
+
+HTTPS enabled
+
+Custom domain configured
+
+Health endpoint verified
+
+Application accessible from mobile devices
+
+
+Headset Integration
+
+Successfully connected the 3M Pro-Comms headset through Web Bluetooth.
+
+Verified:
+
+Bluetooth device discovery
+
+BLE connection
+
+GATT connection
+
+FFE0 service detection
+
+FFE1 characteristic detection
+
+Notification events
+
+PTT press detection
+
+PTT release detection
+
+
+Audio System
+
+Successfully implemented:
+
+Microphone access
+
+Audio recording
+
+Session timing
+
+Audio file generation
+
+Audio playback
+
+Session storage
+
+
+Transcription System
+
+Successfully deployed OpenAI transcription service.
+
+Verified end-to-end workflow:
+
+1. Press PTT
+
+
+2. Record audio
+
+
+3. Save audio file
+
+
+4. Upload to transcription server
+
+
+5. Send to OpenAI
+
+
+6. Receive transcript
+
+
+7. Display transcript in application
+
+
+
+Example successful transcript:
+
+> "Okay, we're going to now record several seconds, 10-15 seconds of audio, and see what happens with this transcription service. Uh, maybe it works, maybe it don't. Let's uh, let's find out."
+
+
+
+Current Status
+
+Working:
+
+Domain hosting
+
+HTTPS
+
+Coolify deployment
+
+Docker container
+
+Bluetooth connection
+
+PTT events
+
+Audio recording
+
+Audio playback
+
+Session logging
+
+OpenAI transcription
+
+
+Known Issues:
+
+VU meter not displaying audio levels
+
+Browser compatibility testing needed
+
+Additional logging needed for audio diagnostics
+
+Need better handling of corrupted or short recordings
+
+
+Future Vision
+
+The PTT Field Logger is evolving into an AI Headset Assistant.
+
+Planned capabilities:
+
+Push-To-Talk mode
+
+VOX mode
+
+Always-On mode
+
+Audio recording
+
+Speech transcription
+
+AI conversation assistant
+
+RAG document memory
+
+Google Drive storage
+
+Google Sheets logging
+
+GPS logging
+
+Weather logging
+
+Photo attachment support
+
+Search and query engine
+
+Multi-AI collaboration
+
+
+Development Notes
+
+This project is being developed by Mike Miller and ChatGPT as a practical experiment in hands-free AI interaction for people working in the field.
+
+Primary goal:
+
+> Offload cognitive workload to AI while keeping the user focused on the task at hand.
+
+
+
+Current test hardware:
+
+Samsung mobile devices
+
+3M Pro-Comms Bluetooth headset
+
+DigitalOcean infrastructure
+
+Coolify deployment platform
+
+
+Status:
+
+First successful end-to-end PTT → Audio → Transcription workflow completed on June 14, 2026.
+
+
+---
+
+That's the sort of entry that future-you (or anybody else looking at the repo) can read six months from now and immediately understand what was actually accomplished today.
+
+
+
 Then I think we've got our next milestone.
 
 What's nice is that we've already crossed the uncertain part.
