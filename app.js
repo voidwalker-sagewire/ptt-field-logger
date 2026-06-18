@@ -159,6 +159,7 @@ async function startSession() {
     audioName: null,
     audioUrl: null,
     transcript: "",
+    summary: "",
     transcriptStatus: "not_requested",
     transcriptError: ""
   };
@@ -363,7 +364,9 @@ function renderSessions() {
     const transcriptBlock = s.transcript
       ? `<div><strong>Transcript:</strong><br>${escapeHtml(s.transcript)}</div>`
       : `<div><strong>Transcript:</strong> ${s.transcriptStatus || "not_requested"}</div>`;
-
+    const summaryBlock = s.summary
+      ? `<div><strong>Summary:</strong><br>${escapeHtml(s.summary)}</div>`
+      : "";
     const errorBlock = s.transcriptError
       ? `<div><strong>Transcript Error:</strong> ${escapeHtml(s.transcriptError)}</div>`
       : "";
@@ -386,6 +389,7 @@ function renderSessions() {
         Reason: ${s.endReason || "—"}<br>
         ${audioBlock}
         ${transcriptBlock}
+        ${summaryBlock}
         ${errorBlock}
       </div>
     `;
@@ -405,6 +409,7 @@ function downloadLog() {
       endReason: s.endReason,
       audioName: s.audioName,
       transcript: s.transcript,
+      summary: s.summary,
       transcriptStatus: s.transcriptStatus,
       transcriptError: s.transcriptError
     }))
