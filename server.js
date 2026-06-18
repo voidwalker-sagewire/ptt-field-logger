@@ -72,9 +72,31 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
 
     fs.unlink(req.file.path, () => {});
 
+    const transcriptText = result.text || "";
+    let summary = "";
+
+    if (transcriptText.trim()) {
+      const summaryResult = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "Summarize headset field notes clearly and briefly. If there are action items, list them. If it is only a test recording, say it was a test."
+          },
+          {
+            role: "user",
+            content: transcriptText
+          }
+        ]
+      });
+
+      summary = summaryResult.choices?.[0]?.message?.content || "";
+    }
+
     res.json({
       ok: true,
-      text: result.text || ""
+      text: transcriptText,
+      summary
     });
   } catch (err) {
     console.error("TRANSCRIBE ERROR:", err);
