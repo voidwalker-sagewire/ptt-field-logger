@@ -14,6 +14,8 @@ Battery change: 18JUN26 1300 Duracell.
 
 
 6/18/2026 2239 Summarization has been achieved. 
+               Next target:
+                 Auto-write each session to Google Sheets with timestamp, session ID, transcript, summary, duration, headset/device, and optional battery log.
                ptt-0020
 
         Start: 6/18/2026, 8:45:18 PM
