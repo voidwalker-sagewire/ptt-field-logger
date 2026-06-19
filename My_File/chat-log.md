@@ -1,3 +1,41 @@
+
+
+That’s a real milestone entry.
+
+The important line is:
+
+6/18/2026 2239 Summarization has been achieved.
+
+That means the chain is now:
+
+PTT
+↓
+Audio
+↓
+Transcript
+↓
+AI Summary
+↓
+Displayed in app
+
+Google Sheets is still next, but summarization is officially working.
+
+I’d add one more note under it:
+
+Next target:
+Auto-write each session to Google Sheets with timestamp, session ID, transcript, summary, duration, headset/device, and optional battery log.
+
+And your battery note is good. That should probably become a real field later:
+
+Battery Installed
+Battery Type
+Battery Start Date/Time
+Battery End Date/Time
+Estimated Runtime
+
+Hazel is starting to remember.
+
+
 I'd put something like this into either your README, a changelog, or your Notes file.
 
 
