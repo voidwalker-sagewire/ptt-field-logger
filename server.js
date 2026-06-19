@@ -46,6 +46,7 @@ app.get("/health", (req, res) => {
     ok: true,
     app: "PTT Field Logger",
     service: "headset-bridge"
+    summary_enabled: true
   });
 });
 
