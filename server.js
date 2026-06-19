@@ -45,7 +45,7 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "PTT Field Logger",
-    service: "headset-bridge"
+    service: "headset-bridge",
     summary_enabled: true
   });
 });
