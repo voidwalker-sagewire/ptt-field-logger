@@ -50,7 +50,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.post("/transcribe", upload.single("audio"), async (req, res) => {
+app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({
