@@ -46,11 +46,26 @@ app.get("/health", (req, res) => {
     ok: true,
     app: "PTT Field Logger",
     service: "headset-bridge",
-    summary_enabled: true
+    summary_enabled: true,
+    api_routes: ["/api/transcribe", "/transcribe"]
   });
 });
 
-app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
+app.get("/api/transcribe", (req, res) => {
+  res.status(405).json({
+    ok: false,
+    error: "Use POST with an audio file"
+  });
+});
+
+app.get("/transcribe", (req, res) => {
+  res.status(405).json({
+    ok: false,
+    error: "Use POST with an audio file"
+  });
+});
+
+async function handleTranscribe(req, res) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({
@@ -66,12 +81,16 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
       });
     }
 
+    console.log("========== AUDIO UPLOAD ==========");
+    console.log("File name:", req.file.originalname);
+    console.log("Mime type:", req.file.mimetype);
+    console.log("Size bytes:", req.file.size);
+    console.log("==================================");
+
     const result = await openai.audio.transcriptions.create({
       file: fs.createReadStream(req.file.path),
       model: "gpt-4o-mini-transcribe"
     });
-
-    fs.unlink(req.file.path, () => {});
 
     const transcriptText = result.text || "";
     let summary = "";
@@ -82,7 +101,8 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Summarize headset field notes clearly and briefly. If there are action items, list them. If it is only a test recording, say it was a test."
+            content:
+              "Summarize headset field notes clearly and briefly. If there are action items, list them. If it is only a test recording, say it was a test."
           },
           {
             role: "user",
@@ -94,19 +114,32 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
       summary = summaryResult.choices?.[0]?.message?.content || "";
     }
 
-    res.json({
+    fs.unlink(req.file.path, () => {});
+
+    console.log("TRANSCRIPT:", transcriptText);
+    console.log("SUMMARY:", summary);
+
+    return res.json({
       ok: true,
       text: transcriptText,
       summary
     });
   } catch (err) {
     console.error("TRANSCRIBE ERROR:", err);
-    res.status(500).json({
+
+    if (req.file?.path) {
+      fs.unlink(req.file.path, () => {});
+    }
+
+    return res.status(500).json({
       ok: false,
       error: err.message
     });
   }
-});
+}
+
+app.post("/api/transcribe", upload.single("audio"), handleTranscribe);
+app.post("/transcribe", upload.single("audio"), handleTranscribe);
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
