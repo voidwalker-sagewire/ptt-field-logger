@@ -12,7 +12,7 @@ Battery change: 18JUN26 1300 Duracell.
 
 
 
-6/20/2026 0521 Both phones and the tablet all transcribe and summarize the audio. Next is GPS capture. Then Google Sheets. 
+6/20/2026 0521 Both phones and the tablet all transcribe and summarize the audio. Next is GPS capture. Then Google Sheets. Just noticed the VU meter needs restored.
 6/18/2026 2239 Summarization has been achieved. 
                Next target:
                  Auto-write each session to Google Sheets with timestamp, session ID, transcript, summary, duration, headset/device, and optional battery log.
