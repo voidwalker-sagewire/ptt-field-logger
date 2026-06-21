@@ -36,6 +36,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
+app.use("/audio", express.static(path.join(__dirname, "audio")));
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -90,53 +92,26 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
       summary = summaryResult.choices?.[0]?.message?.content || "";
     }
 
-    /* ---------------- GOOGLE DRIVE UPLOAD ---------------- */
+    /* ---------------- SERVER AUDIO STORAGE ---------------- */
 
     let audioUrl = "";
 
     try {
-      const keyText = fs.readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, "utf8");
-      const key = JSON.parse(keyText);
+      const audioDir = path.join(__dirname, "audio");
 
-      console.log("Drive service account:", key.client_email);
-      console.log("Drive project:", key.project_id);
-      console.log("Drive folder:", process.env.DRIVE_FOLDER_ID);
+      if (!fs.existsSync(audioDir)) {
+        fs.mkdirSync(audioDir, { recursive: true });
+      }
 
-      const auth = new google.auth.JWT({
-        email: key.client_email,
-        key: key.private_key,
-        scopes: ["https://www.googleapis.com/auth/drive"]
-      });
+      const safeName = (req.file.originalname || "audio.webm").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const finalPath = path.join(audioDir, safeName);
 
-      await auth.authorize();
+      fs.copyFileSync(req.file.path, finalPath);
 
-      const drive = google.drive({ version: "v3", auth });
-
-      const upload = await drive.files.create({
-        requestBody: {
-          name: req.file.originalname,
-          parents: [process.env.DRIVE_FOLDER_ID]
-        },
-        media: {
-          mimeType: req.file.mimetype || "audio/webm",
-          body: fs.createReadStream(req.file.path)
-        },
-        fields: "id",
-        supportsAllDrives: true
-      });
-
-      await drive.permissions.create({
-        fileId: upload.data.id,
-        requestBody: {
-          role: "reader",
-          type: "anyone"
-        }
-      });
-
-      audioUrl = `https://drive.google.com/file/d/${upload.data.id}/view`;
+      audioUrl = `https://headset.herdmate.ag/audio/${encodeURIComponent(safeName)}`;
 
     } catch (err) {
-      console.error("DRIVE ERROR:", err.message);
+      console.error("AUDIO STORAGE ERROR:", err.message);
     }
 
     /* ---------------- CLEANUP ---------------- */
