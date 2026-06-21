@@ -1,4 +1,99 @@
+6/21/2026 0550
+No problem. The path is easy to forget because you don't live in Apps Script all day.
 
+From your Google account:
+
+1. Open Google Drive.
+
+
+2. Click New.
+
+
+3. Click More.
+
+
+4. Click Google Apps Script.
+
+
+
+If you don't see it:
+
+1. Go directly to:
+
+
+
+https://script.google.com
+
+2. Click New Project.
+
+
+
+Then:
+
+1. Delete whatever starter code is in Code.gs.
+
+
+2. Paste the Apps Script I gave you.
+
+
+3. Click Save.
+
+
+4. Name it something like:
+
+
+
+Hazel PTT Logger
+
+Then:
+
+1. Click Deploy (top right).
+
+
+2. New Deployment.
+
+
+3. Choose Web App.
+
+
+4. Set:
+
+Execute As: Me
+
+Who Has Access: Anyone
+
+
+
+5. Deploy.
+
+
+6. Google will make you click through a couple scary authorization screens.
+
+
+7. Copy the long Web App URL it gives you.
+
+
+
+Once you have that URL, paste it here. Then we'll wire the PTT Field Logger into the sheet so every completed transcript automatically lands in your ledger.
+
+You're actually in a good spot now:
+
+✓ Bluetooth PTT
+✓ Audio recording
+✓ Transcription
+✓ Summaries
+✓ GPS
+□ Google Sheet ledger
+□ Weather stamp
+□ Photos
+□ Drive storage
+□ Hazel query engine
+□ AI headset companion
+
+The Google Sheet is the next piece of the steel spine. Once every event is automatically landing in a ledger, everything else gets easier.
+
+========================================================================================
+========================================================================================
 
 That’s a real milestone entry.
 
