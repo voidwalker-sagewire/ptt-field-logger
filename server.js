@@ -141,6 +141,38 @@ async function handleTranscribe(req, res) {
 app.post("/api/transcribe", upload.single("audio"), handleTranscribe);
 app.post("/transcribe", upload.single("audio"), handleTranscribe);
 
+app.post("/api/log-session", async (req, res) => {
+  try {
+    if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
+      return res.status(500).json({
+        ok: false,
+        error: "GOOGLE_SHEET_WEBHOOK_URL is not set"
+      });
+    }
+
+    const sheetResponse = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const text = await sheetResponse.text();
+
+    return res.json({
+      ok: true,
+      sheetResponse: text
+    });
+  } catch (err) {
+    console.error("LOG SESSION ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
+});
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
