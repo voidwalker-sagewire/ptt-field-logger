@@ -95,12 +95,21 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     let audioUrl = "";
 
     try {
-      const auth = new google.auth.GoogleAuth({
-        keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
-        scopes: ["https://www.googleapis.com/auth/drive"]
-      });
+      console.log("Drive key path:", process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+console.log("Drive folder:", process.env.DRIVE_FOLDER_ID);
+console.log("Key file exists:", fs.existsSync(process.env.GOOGLE_SERVICE_ACCOUNT_JSON));
 
-      const drive = google.drive({ version: "v3", auth });
+const auth = new google.auth.GoogleAuth({
+  keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+  scopes: ["https://www.googleapis.com/auth/drive"]
+});
+
+const authClient = await auth.getClient();
+
+const drive = google.drive({
+  version: "v3",
+  auth: authClient
+});
 
       const upload = await drive.files.create({
         requestBody: {
