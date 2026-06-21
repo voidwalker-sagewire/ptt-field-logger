@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import OpenAI from "openai";
+import { google } from "googleapis";
 
 dotenv.config();
 
@@ -15,7 +16,6 @@ const PORT = process.env.PORT || 8787;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const publicDir = __dirname;
 const uploadsDir = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadsDir)) {
@@ -25,9 +25,8 @@ if (!fs.existsSync(uploadsDir)) {
 const storage = multer.diskStorage({
   destination: uploadsDir,
   filename: (req, file, cb) => {
-    const original = file.originalname || "audio.webm";
-    const safe = original.replace(/[^a-zA-Z0-9._-]/g, "_");
-    cb(null, Date.now() + "-" + safe);
+    const safe = (file.originalname || "audio.webm").replace(/[^a-zA-Z0-9._-]/g, "_");
+    cb(null, `${Date.now()}-${safe}`);
   }
 });
 
@@ -35,64 +34,31 @@ const upload = multer({ storage });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(publicDir));
+app.use(express.static(__dirname));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+/* ---------------- HEALTH ---------------- */
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "PTT Field Logger",
-    service: "headset-bridge",
-    summary_enabled: true,
-    api_routes: ["/api/transcribe", "/transcribe"]
+    service: "headset-bridge"
   });
 });
 
-app.get("/api/transcribe", (req, res) => {
-  res.status(405).json({
-    ok: false,
-    error: "Use POST with an audio file"
-  });
-});
+/* ---------------- TRANSCRIBE ---------------- */
 
-app.get("/transcribe", (req, res) => {
-  res.status(405).json({
-    ok: false,
-    error: "Use POST with an audio file"
-  });
-});
-
-async function handleTranscribe(req, res) {
+app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "OPENAI_API_KEY is not set"
-      });
-    }
-
-    if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
-      return res.status(500).json({
-        ok: false,
-        error: "GOOGLE_SHEET_WEBHOOK_URL is not set"
-      });
-    }
-
     if (!req.file) {
-      return res.status(400).json({
-        ok: false,
-        error: "No audio file uploaded"
-      });
+      return res.status(400).json({ ok: false, error: "No audio file uploaded" });
     }
 
-    console.log("========== AUDIO UPLOAD ==========");
-    console.log("File name:", req.file.originalname);
-    console.log("Mime type:", req.file.mimetype);
-    console.log("Size bytes:", req.file.size);
-    console.log("==================================");
+    /* ---------------- OPENAI TRANSCRIBE ---------------- */
 
     const result = await openai.audio.transcriptions.create({
       file: fs.createReadStream(req.file.path),
@@ -100,6 +66,9 @@ async function handleTranscribe(req, res) {
     });
 
     const transcriptText = result.text || "";
+
+    /* ---------------- SUMMARY ---------------- */
+
     let summary = "";
 
     if (transcriptText.trim()) {
@@ -109,7 +78,7 @@ async function handleTranscribe(req, res) {
           {
             role: "system",
             content:
-              "Summarize headset field notes clearly and briefly. If there are action items, list them. If it is only a test recording, say it was a test."
+              "Summarize field notes briefly. List action items if present. If test recording, say so."
           },
           {
             role: "user",
@@ -121,88 +90,11 @@ async function handleTranscribe(req, res) {
       summary = summaryResult.choices?.[0]?.message?.content || "";
     }
 
+    /* ---------------- GOOGLE DRIVE UPLOAD ---------------- */
+
     let audioUrl = "";
 
     try {
-      const audioBase64 = fs.readFileSync(req.file.path).toString("base64");
-
-      const driveResponse = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          id: path.parse(req.file.originalname || "audio").name,
-          audioName: req.file.originalname || "audio.webm",
-          audioBase64,
-          audioMimeType: req.file.mimetype || "audio/webm",
-          source: "PTT Field Logger Audio Upload"
-        })
-      });
-
-      const driveText = await driveResponse.text();
-
-      let drivePayload;
-      try {
-        drivePayload = JSON.parse(driveText);
-      } catch {
-async function handleTranscribe(req, res) {
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY is not set" });
-    }
-
-    if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
-      return res.status(500).json({ ok: false, error: "GOOGLE_SHEET_WEBHOOK_URL is not set" });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: "No audio file uploaded" });
-    }
-
-    console.log("========== AUDIO UPLOAD ==========");
-    console.log(req.file.originalname);
-    console.log("==================================");
-
-    // -------------------------
-    // TRANSCRIBE
-    // -------------------------
-    const result = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
-      model: "gpt-4o-mini-transcribe"
-    });
-
-    const transcriptText = result.text || "";
-
-    // -------------------------
-    // SUMMARY
-    // -------------------------
-    let summary = "";
-
-    if (transcriptText.trim()) {
-      const summaryResult = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Summarize headset field notes clearly and briefly. If there are action items, list them. If test recording, say so."
-          },
-          { role: "user", content: transcriptText }
-        ]
-      });
-
-      summary = summaryResult.choices?.[0]?.message?.content || "";
-    }
-
-    // -------------------------
-    // DRIVE UPLOAD (ONLY STORAGE)
-    // -------------------------
-    let audioUrl = "";
-
-    try {
-      const { google } = await import("googleapis");
-
       const auth = new google.auth.GoogleAuth({
         keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
         scopes: ["https://www.googleapis.com/auth/drive"]
@@ -231,15 +123,14 @@ async function handleTranscribe(req, res) {
       audioUrl = `https://drive.google.com/file/d/${upload.data.id}/view`;
 
     } catch (err) {
-      console.error("DRIVE UPLOAD ERROR:", err.message);
+      console.error("DRIVE ERROR:", err.message);
     }
 
-    // cleanup
+    /* ---------------- CLEANUP ---------------- */
+
     fs.unlink(req.file.path, () => {});
 
-    console.log("TRANSCRIPT:", transcriptText);
-    console.log("SUMMARY:", summary);
-    console.log("AUDIO URL:", audioUrl);
+    /* ---------------- RESPONSE ---------------- */
 
     return res.json({
       ok: true,
@@ -260,29 +151,23 @@ async function handleTranscribe(req, res) {
       error: err.message
     });
   }
-}
+});
 
-app.post("/api/transcribe", upload.single("audio"), handleTranscribe);
-app.post("/transcribe", upload.single("audio"), handleTranscribe);
+/* ---------------- LOG TO SHEET (NO AUDIO HERE) ---------------- */
 
 app.post("/api/log-session", async (req, res) => {
   try {
     if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
-      return res.status(500).json({
-        ok: false,
-        error: "GOOGLE_SHEET_WEBHOOK_URL is not set"
-      });
+      return res.status(500).json({ ok: false, error: "Missing webhook URL" });
     }
 
-    const sheetResponse = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
+    const response = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body)
     });
 
-    const text = await sheetResponse.text();
+    const text = await response.text();
 
     let payload;
     try {
@@ -291,20 +176,12 @@ app.post("/api/log-session", async (req, res) => {
       payload = { ok: false, error: text };
     }
 
-    if (!sheetResponse.ok || payload.ok === false) {
-      return res.status(500).json({
-        ok: false,
-        error: payload.error || "Google Sheet log failed",
-        sheetResponse: payload
-      });
-    }
-
     return res.json({
       ok: true,
-      sheetResponse: payload
+      sheet: payload
     });
+
   } catch (err) {
-    console.error("LOG SESSION ERROR:", err);
     return res.status(500).json({
       ok: false,
       error: err.message
@@ -312,9 +189,7 @@ app.post("/api/log-session", async (req, res) => {
   }
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
-});
+/* ---------------- START ---------------- */
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`PTT Field Logger running on port ${PORT}`);
