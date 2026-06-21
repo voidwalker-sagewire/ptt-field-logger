@@ -1,5 +1,5 @@
 const APP_VERSION = "0.3.1";
-const BRIDGE_TRANSCRIBE_URL = "/api/transcribe";
+const BRIDGE_TRANSCRIBE_URL = "https://headset.herdmate.ag/api/transcribe";
 const SESSION_KEY = "pttFieldLogger.sessions.v0.3.1";
 const COUNTER_KEY = "pttFieldLogger.counter.v0.3.1";
 
