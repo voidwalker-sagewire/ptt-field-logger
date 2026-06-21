@@ -377,6 +377,8 @@ function getGpsStamp() {
       return;
     }
 
+    logRaw("GPS REQUEST STARTED");
+
     navigator.geolocation.getCurrentPosition(
       pos => {
         resolve({
