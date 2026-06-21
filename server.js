@@ -95,21 +95,22 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     let audioUrl = "";
 
     try {
-      console.log("Drive key path:", process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-console.log("Drive folder:", process.env.DRIVE_FOLDER_ID);
-console.log("Key file exists:", fs.existsSync(process.env.GOOGLE_SERVICE_ACCOUNT_JSON));
+      const keyText = fs.readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, "utf8");
+      const key = JSON.parse(keyText);
 
-const auth = new google.auth.GoogleAuth({
-  keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
-  scopes: ["https://www.googleapis.com/auth/drive"]
-});
+      console.log("Drive service account:", key.client_email);
+      console.log("Drive project:", key.project_id);
+      console.log("Drive folder:", process.env.DRIVE_FOLDER_ID);
 
-const authClient = await auth.getClient();
+      const auth = new google.auth.JWT({
+        email: key.client_email,
+        key: key.private_key,
+        scopes: ["https://www.googleapis.com/auth/drive"]
+      });
 
-const drive = google.drive({
-  version: "v3",
-  auth: authClient
-});
+      await auth.authorize();
+
+      const drive = google.drive({ version: "v3", auth });
 
       const upload = await drive.files.create({
         requestBody: {
@@ -117,8 +118,10 @@ const drive = google.drive({
           parents: [process.env.DRIVE_FOLDER_ID]
         },
         media: {
+          mimeType: req.file.mimetype || "audio/webm",
           body: fs.createReadStream(req.file.path)
-        }
+        },
+        fields: "id"
       });
 
       await drive.permissions.create({
