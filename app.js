@@ -177,7 +177,7 @@ async function startSession() {
   saveState();
 }
 
-function endSession(reason) {
+async function endSession(reason) {
   if (!currentSession) {
     setState(false);
     return;
@@ -189,6 +189,30 @@ function endSession(reason) {
   endedSession.endedAt = end.toISOString();
   endedSession.durationMs = end - new Date(endedSession.startedAt);
   endedSession.endReason = reason;
+
+  if (endedSession.latitude && endedSession.longitude) {
+    try {
+      logRaw("Weather stamp started");
+
+      const weatherResponse = await fetch(
+        `https://weather.herdmate.ag/weather?lat=${endedSession.latitude}&lng=${endedSession.longitude}`
+      );
+
+      const weather = await weatherResponse.json();
+
+      endedSession.weatherTemp = weather.temp || "";
+      endedSession.weatherCondition = weather.condition || "";
+      endedSession.weatherWind = weather.wind || "";
+      endedSession.weatherHumidity = weather.humidity || "";
+
+      logRaw(
+        `Weather stamp complete: ${endedSession.weatherTemp}, ${endedSession.weatherCondition}`
+      );
+    } catch (err) {
+      endedSession.weatherError = err.message;
+      logRaw("WEATHER ERROR: " + err.message);
+    }
+  }
 
   sessions.unshift(endedSession);
   currentSession = null;
@@ -487,6 +511,10 @@ async function logSessionToSheet(session) {
         gpsAccuracy: session.gpsAccuracy,
         gpsTimestamp: session.gpsTimestamp,
         gpsError: session.gpsError,
+        weatherTemp: session.weatherTemp,
+        weatherCondition: session.weatherCondition,
+        weatherWind: session.weatherWind,
+        weatherHumidity: session.weatherHumidity,
         transcript: session.transcript,
         summary: session.summary,
         audioName: session.audioName,
@@ -528,6 +556,10 @@ function downloadLog() {
       gpsAccuracy: s.gpsAccuracy,
       gpsTimestamp: s.gpsTimestamp,
       gpsError: s.gpsError,
+      weatherTemp: session.weatherTemp,
+      weatherCondition: session.weatherCondition,
+      weatherWind: session.weatherWind,
+      weatherHumidity: session.weatherHumidity,
       transcript: s.transcript,
       summary: s.summary,
       transcriptStatus: s.transcriptStatus,
