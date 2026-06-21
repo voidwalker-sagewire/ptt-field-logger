@@ -293,7 +293,7 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
     if (session) {
       session.transcript = text;
       session.summary = payload.summary || "";
-      session.audioUrl = payload.audioUrl || session.audioUrl || "";
+      session.audioUrl = payload.audioUrl || "";
       session.transcriptStatus = text ? "complete" : "empty";
       session.transcriptError = "";
       saveState();
