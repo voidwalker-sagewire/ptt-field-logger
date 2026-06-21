@@ -121,7 +121,8 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
           mimeType: req.file.mimetype || "audio/webm",
           body: fs.createReadStream(req.file.path)
         },
-        fields: "id"
+        fields: "id",
+        supportsAllDrives: true
       });
 
       await drive.permissions.create({
