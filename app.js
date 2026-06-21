@@ -267,6 +267,7 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
     session.transcriptError = "";
     saveState();
     renderSessions();
+    await logSessionToSheet(session);
   }
 
   try {
@@ -459,6 +460,33 @@ function renderSessions() {
       </div>
     `;
   }).join("");
+}
+
+async function logSessionToSheet(session) {
+  try {
+    logRaw("Sending session to Google Sheet...");
+
+    const response = await fetch("/api/log-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ...session,
+        source: "PTT Field Logger"
+      })
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+
+    logRaw("Google Sheet log complete");
+  } catch (err) {
+    logRaw("GOOGLE SHEET LOG ERROR: " + err.message);
+  }
 }
 
 function downloadLog() {
