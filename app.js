@@ -266,8 +266,7 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
     session.transcriptStatus = "uploading";
     session.transcriptError = "";
     saveState();
-    renderSessions();
-    await logSessionToSheet(session);
+    renderSessions();    
   }
 
   try {
@@ -298,6 +297,8 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
       session.transcriptError = "";
       saveState();
       renderSessions();
+
+      await logSessionToSheet(session);
     }
 
     logRaw("Transcript complete");
