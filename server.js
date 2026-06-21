@@ -74,6 +74,13 @@ async function handleTranscribe(req, res) {
       });
     }
 
+    if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
+      return res.status(500).json({
+        ok: false,
+        error: "GOOGLE_SHEET_WEBHOOK_URL is not set"
+      });
+    }
+
     if (!req.file) {
       return res.status(400).json({
         ok: false,
@@ -114,15 +121,54 @@ async function handleTranscribe(req, res) {
       summary = summaryResult.choices?.[0]?.message?.content || "";
     }
 
+    let audioUrl = "";
+
+    try {
+      const audioBase64 = fs.readFileSync(req.file.path).toString("base64");
+
+      const driveResponse = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          id: path.parse(req.file.originalname || "audio").name,
+          audioName: req.file.originalname || "audio.webm",
+          audioBase64,
+          audioMimeType: req.file.mimetype || "audio/webm",
+          source: "PTT Field Logger Audio Upload"
+        })
+      });
+
+      const driveText = await driveResponse.text();
+
+      let drivePayload;
+      try {
+        drivePayload = JSON.parse(driveText);
+      } catch {
+        drivePayload = { ok: false, error: driveText };
+      }
+
+      if (drivePayload.ok && drivePayload.audioUrl) {
+        audioUrl = drivePayload.audioUrl;
+      } else {
+        console.error("DRIVE AUDIO UPLOAD FAILED:", drivePayload);
+      }
+    } catch (driveErr) {
+      console.error("DRIVE AUDIO ERROR:", driveErr.message);
+    }
+
     fs.unlink(req.file.path, () => {});
 
     console.log("TRANSCRIPT:", transcriptText);
     console.log("SUMMARY:", summary);
+    console.log("AUDIO URL:", audioUrl);
 
     return res.json({
       ok: true,
       text: transcriptText,
-      summary
+      summary,
+      audioUrl
     });
   } catch (err) {
     console.error("TRANSCRIBE ERROR:", err);
