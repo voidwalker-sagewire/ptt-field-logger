@@ -283,6 +283,9 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
     });
 
     const payload = await response.json();
+    logRaw("SERVER PAYLOAD AUDIO URL: " + (payload.audioUrl || "EMPTY"));
+    logRaw("SERVER PAYLOAD OK: " + payload.ok);
+    logRaw("SERVER PAYLOAD TEXT LEN: " + ((payload.text || "").length));
 
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.error || `HTTP ${response.status}`);
