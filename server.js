@@ -146,18 +146,95 @@ async function handleTranscribe(req, res) {
       try {
         drivePayload = JSON.parse(driveText);
       } catch {
-        drivePayload = { ok: false, error: driveText };
-      }
-
-      if (drivePayload.ok && drivePayload.audioUrl) {
-        audioUrl = drivePayload.audioUrl;
-      } else {
-        console.error("DRIVE AUDIO UPLOAD FAILED:", drivePayload);
-      }
-    } catch (driveErr) {
-      console.error("DRIVE AUDIO ERROR:", driveErr.message);
+async function handleTranscribe(req, res) {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY is not set" });
     }
 
+    if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
+      return res.status(500).json({ ok: false, error: "GOOGLE_SHEET_WEBHOOK_URL is not set" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: "No audio file uploaded" });
+    }
+
+    console.log("========== AUDIO UPLOAD ==========");
+    console.log(req.file.originalname);
+    console.log("==================================");
+
+    // -------------------------
+    // TRANSCRIBE
+    // -------------------------
+    const result = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(req.file.path),
+      model: "gpt-4o-mini-transcribe"
+    });
+
+    const transcriptText = result.text || "";
+
+    // -------------------------
+    // SUMMARY
+    // -------------------------
+    let summary = "";
+
+    if (transcriptText.trim()) {
+      const summaryResult = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Summarize headset field notes clearly and briefly. If there are action items, list them. If test recording, say so."
+          },
+          { role: "user", content: transcriptText }
+        ]
+      });
+
+      summary = summaryResult.choices?.[0]?.message?.content || "";
+    }
+
+    // -------------------------
+    // DRIVE UPLOAD (ONLY STORAGE)
+    // -------------------------
+    let audioUrl = "";
+
+    try {
+      const { google } = await import("googleapis");
+
+      const auth = new google.auth.GoogleAuth({
+        keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+        scopes: ["https://www.googleapis.com/auth/drive"]
+      });
+
+      const drive = google.drive({ version: "v3", auth });
+
+      const upload = await drive.files.create({
+        requestBody: {
+          name: req.file.originalname,
+          parents: [process.env.DRIVE_FOLDER_ID]
+        },
+        media: {
+          body: fs.createReadStream(req.file.path)
+        }
+      });
+
+      await drive.permissions.create({
+        fileId: upload.data.id,
+        requestBody: {
+          role: "reader",
+          type: "anyone"
+        }
+      });
+
+      audioUrl = `https://drive.google.com/file/d/${upload.data.id}/view`;
+
+    } catch (err) {
+      console.error("DRIVE UPLOAD ERROR:", err.message);
+    }
+
+    // cleanup
     fs.unlink(req.file.path, () => {});
 
     console.log("TRANSCRIPT:", transcriptText);
@@ -170,6 +247,7 @@ async function handleTranscribe(req, res) {
       summary,
       audioUrl
     });
+
   } catch (err) {
     console.error("TRANSCRIBE ERROR:", err);
 
