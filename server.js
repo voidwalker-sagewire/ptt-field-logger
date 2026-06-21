@@ -160,9 +160,24 @@ app.post("/api/log-session", async (req, res) => {
 
     const text = await sheetResponse.text();
 
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = { ok: false, error: text };
+    }
+
+    if (!sheetResponse.ok || payload.ok === false) {
+      return res.status(500).json({
+        ok: false,
+        error: payload.error || "Google Sheet log failed",
+        sheetResponse: payload
+      });
+    }
+
     return res.json({
       ok: true,
-      sheetResponse: text
+      sheetResponse: payload
     });
   } catch (err) {
     console.error("LOG SESSION ERROR:", err);
