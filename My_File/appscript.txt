@@ -1,41 +1,73 @@
 const SPREADSHEET_ID = "1ShhF9FM8YAIQK_5XC_xPkEdtUc2dx4QVZ3Y8wRcoHqc";
 const SHEET_NAME = "PTT_Log";
+const AUDIO_FOLDER_ID = "1ANLKiljvno8a4pwG-otgXd8U0gYfQMms";
 
 function doPost(e) {
   try {
-      const data = JSON.parse(e.postData.contents);
-          const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-              const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = JSON.parse(e.postData.contents);
 
-                  if (!sheet) {
-                        throw new Error("Sheet tab not found: " + SHEET_NAME);
-                            }
+    let audioUrl = data.audioUrl || "";
 
-                                sheet.appendRow([
-                                      new Date(),
-                                            data.id || "",
-                                                  data.startedAt || "",
-                                                        data.endedAt || "",
-                                                              data.durationMs || "",
-                                                                    data.endReason || "",
-                                                                          data.latitude || "",
-                                                                                data.longitude || "",
-                                                                                      data.gpsAccuracy || "",
-                                                                                            data.transcript || "",
-                                                                                                  data.summary || "",
-                                                                                                        data.audioName || "",
-                                                                                                          data.audioUrl || "",
-                                                                                                              data.transcriptStatus || "",
-                                                                                                                    data.source || "PTT Field Logger"
-                                                                                                                        ]);
+    if (data.audioBase64) {
+      audioUrl = saveAudioToDrive(
+        data.audioName || "audio.webm",
+        data.audioBase64,
+        data.audioMimeType || "audio/webm"
+      );
+    }
 
-                                                                                                                            return ContentService
-                                                                                                                                  .createTextOutput(JSON.stringify({ ok: true }))
-                                                                                                                                        .setMimeType(ContentService.MimeType.JSON);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
 
-                                                                                                                                          } catch (err) {
-                                                                                                                                              return ContentService
-                                                                                                                                                    .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
-                                                                                                                                                          .setMimeType(ContentService.MimeType.JSON);
-                                                                                                                                                            }
-                                                                                                                                                            }
+    if (!sheet) {
+      throw new Error("Sheet tab not found: " + SHEET_NAME);
+    }
+
+    sheet.appendRow([
+      new Date(),
+      data.id || "",
+      data.startedAt || "",
+      data.endedAt || "",
+      data.durationMs || "",
+      data.endReason || "",
+      data.latitude || "",
+      data.longitude || "",
+      data.gpsAccuracy || "",
+      data.transcript || "",
+      data.summary || "",
+      data.audioName || "",
+      audioUrl || "",
+      data.transcriptStatus || "",
+      data.source || "PTT Field Logger"
+    ]);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true, audioUrl }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function saveAudioToDrive(fileName, base64Audio, mimeType) {
+  const folder = DriveApp.getFolderById(AUDIO_FOLDER_ID);
+  const bytes = Utilities.base64Decode(base64Audio);
+
+  const blob = Utilities.newBlob(
+    bytes,
+    mimeType || "audio/webm",
+    fileName
+  );
+
+  const file = folder.createFile(blob);
+
+  file.setSharing(
+    DriveApp.Access.ANYONE_WITH_LINK,
+    DriveApp.Permission.VIEW
+  );
+
+  return file.getUrl();
+}
