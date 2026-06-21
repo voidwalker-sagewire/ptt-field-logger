@@ -474,7 +474,24 @@ async function logSessionToSheet(session) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        ...session,
+        id: session.id,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        durationMs: session.durationMs,
+        endReason: session.endReason,
+        latitude: session.latitude,
+        longitude: session.longitude,
+        gpsAccuracy: session.gpsAccuracy,
+        gpsTimestamp: session.gpsTimestamp,
+        gpsError: session.gpsError,
+        transcript: session.transcript,
+        summary: session.summary,
+        audioName: session.audioName,
+        audioUrl: session.audioUrl && session.audioUrl.startsWith("http")
+          ? session.audioUrl
+          : "",
+        transcriptStatus: session.transcriptStatus,
+        transcriptError: session.transcriptError,
         source: "PTT Field Logger"
       })
     });
