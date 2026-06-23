@@ -24,22 +24,26 @@ function doPost(e) {
     }
 
     sheet.appendRow([
-      new Date(),
-      data.id || "",
-      data.startedAt || "",
-      data.endedAt || "",
-      data.durationMs || "",
-      data.endReason || "",
-      data.latitude || "",
-      data.longitude || "",
-      data.gpsAccuracy || "",
-      data.transcript || "",
-      data.summary || "",
-      data.audioName || "",
-      audioUrl || "",
-      data.transcriptStatus || "",
-      data.source || "PTT Field Logger"
-    ]);
+    new Date(),
+    data.id || "",
+    data.startedAt || "",
+    data.endedAt || "",
+    data.durationMs || "",
+    data.endReason || "",
+    data.latitude || "",
+    data.longitude || "",
+    data.gpsAccuracy || "",
+    data.weatherTemp || "",
+    data.weatherCondition || "",
+    data.weatherWind || "",
+    data.weatherHumidity || "",
+    data.transcript || "",
+    data.summary || "",
+    data.audioName || "",
+    data.audioUrl || "",
+    data.transcriptStatus || "",
+    data.source || "PTT Field Logger"
+  ]);
 
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true, audioUrl }))
