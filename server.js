@@ -141,12 +141,53 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
 });
 
 app.post("/api/hazel", async (req, res) => {
-  const text = req.body.text || "";
+  try {
+    const text = req.body.text || "";
+    const answer = `You said: ${text}`;
 
-  return res.json({
-    ok: true,
-    answer: `You said: ${text}`
-  });
+    let audioUrl = "";
+
+    try {
+      const ttsResponse = await fetch("http://138.197.120.229:5000/speak", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text: answer })
+      });
+
+      if (!ttsResponse.ok) {
+        throw new Error(`Piper HTTP ${ttsResponse.status}`);
+      }
+
+      const audioDir = path.join(__dirname, "audio");
+      if (!fs.existsSync(audioDir)) {
+        fs.mkdirSync(audioDir, { recursive: true });
+      }
+
+      const fileName = `hazel-${Date.now()}.wav`;
+      const finalPath = path.join(audioDir, fileName);
+
+      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
+      fs.writeFileSync(finalPath, buffer);
+
+      audioUrl = `https://headset.herdmate.ag/audio/${fileName}`;
+    } catch (ttsErr) {
+      console.error("HAZEL TTS ERROR:", ttsErr.message);
+    }
+
+    return res.json({
+      ok: true,
+      answer,
+      audioUrl
+    });
+  } catch (err) {
+    console.error("HAZEL ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
 });
 
 /* ---------------- LOG TO SHEET (NO AUDIO HERE) ---------------- */
