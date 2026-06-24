@@ -143,7 +143,26 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
 app.post("/api/hazel", async (req, res) => {
   try {
     const text = req.body.text || "";
-    const answer = `You said: ${text}`;
+    let answer = "Copy that.";
+
+if (text.trim()) {
+  const hazelResult = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are Hazel, a calm field assistant for a headset app. Reply briefly, naturally, and usefully. If the user is logging a field note, acknowledge it and identify any obvious action items. Keep replies short enough to hear through a headset."
+      },
+      {
+        role: "user",
+        content: text
+      }
+    ]
+  });
+
+  answer = hazelResult.choices?.[0]?.message?.content || "Copy that.";
+}
 
     let audioUrl = "";
 
