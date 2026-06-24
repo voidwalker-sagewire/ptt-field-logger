@@ -325,6 +325,10 @@ async function transcribeAudio(sessionId, audioBlob, audioType) {
       session.transcriptError = "";
       saveState();
       renderSessions();
+      
+      if (text) {
+      await askHazel(text);
+      }
 
       await logSessionToSheet(session);
     }
@@ -489,6 +493,30 @@ function renderSessions() {
       </div>
     `;
   }).join("");
+}
+
+async function askHazel(text) {
+  try {
+    logRaw("Sending transcript to Hazel...");
+
+    const response = await fetch("/api/hazel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text })
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+
+    logRaw("HAZEL: " + (payload.answer || ""));
+  } catch (err) {
+    logRaw("HAZEL ERROR: " + err.message);
+  }
 }
 
 async function logSessionToSheet(session) {
