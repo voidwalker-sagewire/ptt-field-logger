@@ -140,6 +140,24 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   }
 });
 
+app.post("/api/hazel", async (req, res) => {
+  try {
+    const answer = "Hello Massive. Hazel is online.";
+
+    return res.json({
+      ok: true,
+      answer
+    });
+  } catch (err) {
+    console.error("HAZEL ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
+});
+
+
 /* ---------------- LOG TO SHEET (NO AUDIO HERE) ---------------- */
 
 app.post("/api/log-session", async (req, res) => {
@@ -169,23 +187,6 @@ app.post("/api/log-session", async (req, res) => {
     });
 
   } catch (err) {
-    return res.status(500).json({
-      ok: false,
-      error: err.message
-    });
-  }
-});
-
-app.post("/api/hazel", async (req, res) => {
-  try {
-    const answer = "Hello Massive. Hazel is online.";
-
-    return res.json({
-      ok: true,
-      answer
-    });
-  } catch (err) {
-    console.error("HAZEL ERROR:", err);
     return res.status(500).json({
       ok: false,
       error: err.message
