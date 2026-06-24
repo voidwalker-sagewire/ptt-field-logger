@@ -176,6 +176,23 @@ app.post("/api/log-session", async (req, res) => {
   }
 });
 
+app.post("/api/hazel", async (req, res) => {
+  try {
+    const answer = "Hello Massive. Hazel is online.";
+
+    return res.json({
+      ok: true,
+      answer
+    });
+  } catch (err) {
+    console.error("HAZEL ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
+});
+
 /* ---------------- START ---------------- */
 
 app.listen(PORT, "0.0.0.0", () => {
