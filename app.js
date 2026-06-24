@@ -516,8 +516,24 @@ async function askHazel(text) {
     logRaw("HAZEL: " + (payload.answer || ""));
     if (payload.audioUrl) {
     logRaw("Playing Hazel voice...");
-    const audio = new Audio(payload.audioUrl);
-    await audio.play();
+    let hazelPlayer = document.getElementById("hazelPlayer");
+
+if (!hazelPlayer) {
+  hazelPlayer = document.createElement("audio");
+  hazelPlayer.id = "hazelPlayer";
+  hazelPlayer.controls = true;
+  document.body.appendChild(hazelPlayer);
+}
+
+hazelPlayer.src = payload.audioUrl;
+hazelPlayer.load();
+
+try {
+  await hazelPlayer.play();
+  logRaw("Hazel voice playing");
+} catch (err) {
+  logRaw("HAZEL PLAY ERROR: " + err.message);
+}
       }
     } catch (err) {
     logRaw("HAZEL ERROR: " + err.message);
