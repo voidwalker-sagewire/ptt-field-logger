@@ -514,7 +514,12 @@ async function askHazel(text) {
     }
 
     logRaw("HAZEL: " + (payload.answer || ""));
-  } catch (err) {
+    if (payload.audioUrl) {
+    logRaw("Playing Hazel voice...");
+    const audio = new Audio(payload.audioUrl);
+    await audio.play();
+      }
+    } catch (err) {
     logRaw("HAZEL ERROR: " + err.message);
   }
 }
