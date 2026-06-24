@@ -141,22 +141,13 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
 });
 
 app.post("/api/hazel", async (req, res) => {
-  try {
-    const answer = "Hello Massive. Hazel is online.";
+  const text = req.body.text || "";
 
-    return res.json({
-      ok: true,
-      answer
-    });
-  } catch (err) {
-    console.error("HAZEL ERROR:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err.message
-    });
-  }
+  return res.json({
+    ok: true,
+    answer: `You said: ${text}`
+  });
 });
-
 
 /* ---------------- LOG TO SHEET (NO AUDIO HERE) ---------------- */
 
