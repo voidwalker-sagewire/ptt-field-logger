@@ -514,28 +514,36 @@ async function askHazel(text) {
     }
 
     logRaw("HAZEL: " + (payload.answer || ""));
+
     if (payload.audioUrl) {
-    logRaw("Playing Hazel voice...");
-    let hazelPlayer = document.getElementById("hazelPlayer");
+      logRaw("Preparing Hazel voice...");
 
-if (!hazelPlayer) {
-  hazelPlayer = document.createElement("audio");
-  hazelPlayer.id = "hazelPlayer";
-  hazelPlayer.controls = true;
-  document.body.appendChild(hazelPlayer);
-}
+      let hazelPlayer = document.getElementById("hazelPlayer");
 
-hazelPlayer.src = payload.audioUrl;
-hazelPlayer.load();
-
-try {
-  await hazelPlayer.play();
-  logRaw("Hazel voice playing");
-} catch (err) {
-  logRaw("HAZEL PLAY ERROR: " + err.message);
-}
+      if (!hazelPlayer) {
+        hazelPlayer = document.createElement("audio");
+        hazelPlayer.id = "hazelPlayer";
+        hazelPlayer.controls = true;
+        hazelPlayer.preload = "auto";
+        hazelPlayer.style.width = "100%";
+        hazelPlayer.style.marginTop = "12px";
+        document.body.appendChild(hazelPlayer);
       }
-    } catch (err) {
+
+      hazelPlayer.pause();
+      hazelPlayer.src = payload.audioUrl + "?t=" + Date.now();
+      hazelPlayer.load();
+
+      try {
+        await hazelPlayer.play();
+        logRaw("Hazel voice playing");
+      } catch (err) {
+        logRaw("HAZEL PLAY ERROR: " + err.message);
+        logRaw("Tap the Hazel audio player to play manually.");
+      }
+    }
+
+  } catch (err) {
     logRaw("HAZEL ERROR: " + err.message);
   }
 }
