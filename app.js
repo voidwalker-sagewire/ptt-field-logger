@@ -1,7 +1,7 @@
-const APP_VERSION = "0.3.1";
-const BRIDGE_TRANSCRIBE_URL = "https://headset.herdmate.ag/api/transcribe";
-const SESSION_KEY = "pttFieldLogger.sessions.v0.3.1";
-const COUNTER_KEY = "pttFieldLogger.counter.v0.3.1";
+const APP_VERSION = "1.0.0";
+const FIELD_SESSION_URL = "/api/field-session";
+const SESSION_KEY = "pttFieldLogger.sessions.v1.0.0";
+const COUNTER_KEY = "pttFieldLogger.counter.v1.0.0";
 
 let characteristic;
 let connectedDevice = null;
@@ -157,15 +157,28 @@ async function startSession() {
     endedAt: null,
     durationMs: null,
     endReason: null,
+
     audioName: null,
     audioUrl: null,
+
     latitude: gps.latitude,
     longitude: gps.longitude,
     gpsAccuracy: gps.gpsAccuracy,
+    altitude: gps.altitude,
+    altitudeAccuracy: gps.altitudeAccuracy,
+    heading: gps.heading,
+    speed: gps.speed,
     gpsTimestamp: gps.gpsTimestamp,
     gpsError: gps.gpsError,
+
     transcript: "",
     summary: "",
+    reply: "",
+    replyAudioUrl: "",
+
+    location: null,
+    weather: null,
+
     transcriptStatus: "not_requested",
     transcriptError: ""
   };
@@ -189,30 +202,6 @@ async function endSession(reason) {
   endedSession.endedAt = end.toISOString();
   endedSession.durationMs = end - new Date(endedSession.startedAt);
   endedSession.endReason = reason;
-
-  if (endedSession.latitude && endedSession.longitude) {
-    try {
-      logRaw("Weather stamp started");
-
-      const weatherResponse = await fetch(
-        `https://weather.herdmate.ag/weather?lat=${endedSession.latitude}&lng=${endedSession.longitude}`
-      );
-
-      const weather = await weatherResponse.json();
-
-      endedSession.weatherTemp = weather.temp || "";
-      endedSession.weatherCondition = weather.condition || "";
-      endedSession.weatherWind = weather.wind || "";
-      endedSession.weatherHumidity = weather.humidity || "";
-
-      logRaw(
-        `Weather stamp complete: ${endedSession.weatherTemp}, ${endedSession.weatherCondition}`
-      );
-    } catch (err) {
-      endedSession.weatherError = err.message;
-      logRaw("WEATHER ERROR: " + err.message);
-    }
-  }
 
   sessions.unshift(endedSession);
   currentSession = null;
@@ -244,9 +233,7 @@ function startRecording() {
   mediaRecorder = new MediaRecorder(micStream, options);
 
   mediaRecorder.ondataavailable = event => {
-    if (event.data && event.data.size > 0) {
-      recordedChunks.push(event.data);
-    }
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
   };
 
   mediaRecorder.start();
@@ -262,87 +249,143 @@ function stopRecordingForSession(sessionId) {
   mediaRecorder.onstop = async () => {
     const type = mediaRecorder.mimeType || "audio/webm";
     const audioBlob = new Blob(recordedChunks, { type });
-    const audioUrl = URL.createObjectURL(audioBlob);
+    const localAudioUrl = URL.createObjectURL(audioBlob);
     const audioName = `${sessionId}.webm`;
 
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
       session.audioName = audioName;
-      session.audioUrl = audioUrl;
+      session.audioUrl = localAudioUrl;
       session.transcriptStatus = "queued";
       saveState();
       renderSessions();
     }
 
     logRaw(`Audio saved locally: ${audioName}`);
-
-    await transcribeAudio(sessionId, audioBlob, type);
+    await sendFieldSession(sessionId, audioBlob, type);
   };
 
   mediaRecorder.stop();
   logRaw("Audio recording stopped");
 }
 
-async function transcribeAudio(sessionId, audioBlob, audioType) {
-  const session = sessions.find(s => s.id === sessionId);
+function buildMetadata(session, audioType) {
+  return {
+    app: "PTT Field Logger",
+    app_version: APP_VERSION,
+    session: {
+      id: session.id,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      durationMs: session.durationMs,
+      endReason: session.endReason,
+      audioType
+    },
+    gps: {
+      latitude: session.latitude,
+      longitude: session.longitude,
+      accuracy_m: session.gpsAccuracy,
+      altitude_m: session.altitude,
+      altitude_accuracy_m: session.altitudeAccuracy,
+      heading: session.heading,
+      speed_mps: session.speed,
+      gps_timestamp: session.gpsTimestamp,
+      gps_error: session.gpsError
+    },
+    device: {
+      device_id: connectedDevice?.id || "browser-device",
+      name: connectedDevice?.name || "manual-browser",
+      user_agent: navigator.userAgent,
+      platform: navigator.platform
+    }
+  };
+}
 
-  if (session) {
-    session.transcriptStatus = "uploading";
-    session.transcriptError = "";
-    saveState();
-    renderSessions();    
-  }
+async function sendFieldSession(sessionId, audioBlob, audioType) {
+  const session = sessions.find(s => s.id === sessionId);
+  if (!session) return;
+
+  session.transcriptStatus = "uploading";
+  session.transcriptError = "";
+  saveState();
+  renderSessions();
 
   try {
     const ext = audioType && audioType.includes("mp4") ? "m4a" : "webm";
 
     const formData = new FormData();
     formData.append("audio", audioBlob, `${sessionId}.${ext}`);
+    formData.append("metadata", JSON.stringify(buildMetadata(session, audioType)));
 
-    logRaw("Uploading audio for transcription...");
+    logRaw("Sending field session to SageWire Gateway pipeline...");
 
-    const response = await fetch(BRIDGE_TRANSCRIBE_URL, {
+    const response = await fetch(FIELD_SESSION_URL, {
       method: "POST",
       body: formData
     });
 
     const payload = await response.json();
-    logRaw("SERVER PAYLOAD AUDIO URL: " + (payload.audioUrl || "EMPTY"));
-    logRaw("SERVER PAYLOAD OK: " + payload.ok);
-    logRaw("SERVER PAYLOAD TEXT LEN: " + ((payload.text || "").length));
+
+    logRaw("PIPELINE OK: " + payload.ok);
+    logRaw("TRANSCRIPT LEN: " + ((payload.transcript || "").length));
+    logRaw("REPLY AUDIO URL: " + (payload.replyAudioUrl || "EMPTY"));
 
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
 
-    const text = (payload.text || "").trim();
+    session.transcript = payload.transcript || "";
+    session.summary = payload.summary || "";
+    session.reply = payload.answer || "";
+    session.replyAudioUrl = payload.replyAudioUrl || "";
+    session.serverAudioUrl = payload.inputAudioUrl || "";
+    session.location = payload.location || null;
+    session.weather = payload.weather || null;
+    session.transcriptStatus = session.transcript ? "complete" : "empty";
+    session.transcriptError = "";
 
-    if (session) {
-      session.transcript = text;
-      session.summary = payload.summary || "";
-      session.audioUrl = payload.audioUrl || "";
-      session.transcriptStatus = text ? "complete" : "empty";
-      session.transcriptError = "";
-      saveState();
-      renderSessions();
-      
-      if (text) {
-      await askHazel(text);
-      }
+    saveState();
+    renderSessions();
 
-      await logSessionToSheet(session);
+    if (payload.replyAudioUrl) {
+      await playAssistantAudio(payload.replyAudioUrl);
     }
 
-    logRaw("Transcript complete");
+    logRaw("Field session complete");
   } catch (err) {
-    if (session) {
-      session.transcriptStatus = "failed";
-      session.transcriptError = err.message;
-      saveState();
-      renderSessions();
-    }
+    session.transcriptStatus = "failed";
+    session.transcriptError = err.message;
+    saveState();
+    renderSessions();
+    logRaw("FIELD SESSION ERROR: " + err.message);
+  }
+}
 
-    logRaw("TRANSCRIPTION ERROR: " + err.message);
+async function playAssistantAudio(audioUrl) {
+  logRaw("Preparing EmberVox voice...");
+
+  let player = document.getElementById("assistantPlayer");
+
+  if (!player) {
+    player = document.createElement("audio");
+    player.id = "assistantPlayer";
+    player.controls = true;
+    player.preload = "auto";
+    player.style.width = "100%";
+    player.style.marginTop = "12px";
+    document.body.appendChild(player);
+  }
+
+  player.pause();
+  player.src = audioUrl + "?t=" + Date.now();
+  player.load();
+
+  try {
+    await player.play();
+    logRaw("EmberVox voice playing");
+  } catch (err) {
+    logRaw("EMBERVOX PLAY ERROR: " + err.message);
+    logRaw("Tap the assistant audio player to play manually.");
   }
 }
 
@@ -405,6 +448,10 @@ function getGpsStamp() {
         latitude: null,
         longitude: null,
         gpsAccuracy: null,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
         gpsTimestamp: null,
         gpsError: "Geolocation not supported"
       });
@@ -419,6 +466,10 @@ function getGpsStamp() {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           gpsAccuracy: pos.coords.accuracy,
+          altitude: pos.coords.altitude,
+          altitudeAccuracy: pos.coords.altitudeAccuracy,
+          heading: pos.coords.heading,
+          speed: pos.coords.speed,
           gpsTimestamp: new Date(pos.timestamp).toISOString(),
           gpsError: ""
         });
@@ -428,6 +479,10 @@ function getGpsStamp() {
           latitude: null,
           longitude: null,
           gpsAccuracy: null,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
           gpsTimestamp: null,
           gpsError: err.message
         });
@@ -457,26 +512,44 @@ function renderSessions() {
         ? `<div><strong>GPS:</strong> ${escapeHtml(s.gpsError)}</div>`
         : "";
 
+    const weatherBlock = s.weather
+      ? `<div><strong>Weather:</strong><br>${escapeHtml(JSON.stringify(s.weather))}</div>`
+      : "";
+
+    const locationBlock = s.location
+      ? `<div><strong>LOC:</strong><br>${escapeHtml(JSON.stringify(s.location))}</div>`
+      : "";
+
     const transcriptBlock = s.transcript
       ? `<div><strong>Transcript:</strong><br>${escapeHtml(s.transcript)}</div>`
       : `<div><strong>Transcript:</strong> ${s.transcriptStatus || "not_requested"}</div>`;
 
-    const summaryBlock = s.summary
-      ? `<div><strong>Summary:</strong><br>${escapeHtml(s.summary)}</div>`
+    const replyBlock = s.reply
+      ? `<div><strong>Assistant Reply:</strong><br>${escapeHtml(s.reply)}</div>`
       : "";
 
     const errorBlock = s.transcriptError
-      ? `<div><strong>Transcript Error:</strong> ${escapeHtml(s.transcriptError)}</div>`
+      ? `<div><strong>Error:</strong> ${escapeHtml(s.transcriptError)}</div>`
       : "";
 
     const audioBlock = s.audioUrl
       ? `
         <div>
+          <strong>Recorded Audio:</strong><br>
           <audio controls src="${s.audioUrl}"></audio><br>
-          <a href="${s.audioUrl}" download="${s.audioName || s.id + ".webm"}">Download Audio</a>
+          <a href="${s.audioUrl}" download="${s.audioName || s.id + ".webm"}">Download Local Audio</a>
         </div>
       `
       : `<div>Audio: not saved</div>`;
+
+    const replyAudioBlock = s.replyAudioUrl
+      ? `
+        <div>
+          <strong>EmberVox Reply:</strong><br>
+          <audio controls src="${s.replyAudioUrl}"></audio>
+        </div>
+      `
+      : "";
 
     return `
       <div class="session">
@@ -488,113 +561,14 @@ function renderSessions() {
         ${gpsBlock}
         ${audioBlock}
         ${transcriptBlock}
-        ${summaryBlock}
+        ${replyBlock}
+        ${replyAudioBlock}
+        ${locationBlock}
+        ${weatherBlock}
         ${errorBlock}
       </div>
     `;
   }).join("");
-}
-
-async function askHazel(text) {
-  try {
-    logRaw("Sending transcript to Hazel...");
-
-    const response = await fetch("/api/hazel", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text })
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok || payload.ok === false) {
-      throw new Error(payload.error || `HTTP ${response.status}`);
-    }
-
-    logRaw("HAZEL: " + (payload.answer || ""));
-    logRaw("HAZEL AUDIO URL: " + (payload.audioUrl || "EMPTY"));
-
-    if (payload.audioUrl) {
-      logRaw("Preparing Hazel voice...");
-
-      let hazelPlayer = document.getElementById("hazelPlayer");
-
-      if (!hazelPlayer) {
-        hazelPlayer = document.createElement("audio");
-        hazelPlayer.id = "hazelPlayer";
-        hazelPlayer.controls = true;
-        hazelPlayer.preload = "auto";
-        hazelPlayer.style.width = "100%";
-        hazelPlayer.style.marginTop = "12px";
-        document.body.appendChild(hazelPlayer);
-      }
-
-      hazelPlayer.pause();
-      hazelPlayer.src = payload.audioUrl + "?t=" + Date.now();
-      hazelPlayer.load();
-
-      try {
-        await hazelPlayer.play();
-        logRaw("Hazel voice playing");
-      } catch (err) {
-        logRaw("HAZEL PLAY ERROR: " + err.message);
-        logRaw("Tap the Hazel audio player to play manually.");
-      }
-    }
-
-  } catch (err) {
-    logRaw("HAZEL ERROR: " + err.message);
-  }
-}
-
-async function logSessionToSheet(session) {
-  try {
-    logRaw("Sending session to Google Sheet...");
-
-    const response = await fetch("/api/log-session", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        id: session.id,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        durationMs: session.durationMs,
-        endReason: session.endReason,
-        latitude: session.latitude,
-        longitude: session.longitude,
-        gpsAccuracy: session.gpsAccuracy,
-        gpsTimestamp: session.gpsTimestamp,
-        gpsError: session.gpsError,
-        weatherTemp: session.weatherTemp,
-        weatherCondition: session.weatherCondition,
-        weatherWind: session.weatherWind,
-        weatherHumidity: session.weatherHumidity,
-        transcript: session.transcript,
-        summary: session.summary,
-        audioName: session.audioName,
-        audioUrl: session.audioUrl && session.audioUrl.startsWith("http")
-          ? session.audioUrl
-          : "",
-        transcriptStatus: session.transcriptStatus,
-        transcriptError: session.transcriptError,
-        source: "PTT Field Logger"
-      })
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok || payload.ok === false) {
-      throw new Error(payload.error || `HTTP ${response.status}`);
-    }
-
-    logRaw("Google Sheet log complete");
-  } catch (err) {
-    logRaw("GOOGLE SHEET LOG ERROR: " + err.message);
-  }
 }
 
 function downloadLog() {
@@ -602,27 +576,7 @@ function downloadLog() {
     app: "PTT Field Logger",
     version: APP_VERSION,
     exportedAt: nowIso(),
-    sessions: sessions.map(s => ({
-      id: s.id,
-      startedAt: s.startedAt,
-      endedAt: s.endedAt,
-      durationMs: s.durationMs,
-      endReason: s.endReason,
-      audioName: s.audioName,
-      latitude: s.latitude,
-      longitude: s.longitude,
-      gpsAccuracy: s.gpsAccuracy,
-      gpsTimestamp: s.gpsTimestamp,
-      gpsError: s.gpsError,
-      weatherTemp: s.weatherTemp,
-      weatherCondition: s.weatherCondition,
-      weatherWind: s.weatherWind,
-      weatherHumidity: s.weatherHumidity,
-      transcript: s.transcript,
-      summary: s.summary,
-      transcriptStatus: s.transcriptStatus,
-      transcriptError: s.transcriptError
-    }))
+    sessions
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
