@@ -1,6 +1,7 @@
-const CACHE_NAME = "ptt-field-logger-v0.3.1";
+const CACHE_NAME = "ptt-field-logger-v1.0.0";
 
 self.addEventListener("install", event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll([
@@ -23,7 +24,7 @@ self.addEventListener("activate", event => {
           .filter(key => key !== CACHE_NAME)
           .map(key => caches.delete(key))
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
