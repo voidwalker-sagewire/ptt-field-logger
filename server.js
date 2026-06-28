@@ -118,9 +118,8 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     fs.unlink(req.file.path, () => {});
 
     /* ---------------- RESPONSE ---------------- */
-
-    console.log("HAZEL ANSWER:", answer);
-    console.log("HAZEL AUDIO URL:", audioUrl || "EMPTY");
+console.log("HAZEL ANSWER:", answer);
+    console.log("HAZEL AUDIO URL:", audioUrl || "EMPTY");  
     return res.json({
       ok: true,
       text: transcriptText,
@@ -196,6 +195,9 @@ if (text.trim()) {
     } catch (ttsErr) {
       console.error("HAZEL TTS ERROR:", ttsErr.message);
     }
+
+    console.log("HAZEL ANSWER:", answer);
+    console.log("HAZEL AUDIO URL:", audioUrl || "EMPTY");
 
     return res.json({
       ok: true,
