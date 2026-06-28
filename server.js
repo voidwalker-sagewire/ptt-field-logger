@@ -118,8 +118,7 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     fs.unlink(req.file.path, () => {});
 
     /* ---------------- RESPONSE ---------------- */
-console.log("HAZEL ANSWER:", answer);
-    console.log("HAZEL AUDIO URL:", audioUrl || "EMPTY");  
+  
     return res.json({
       ok: true,
       text: transcriptText,
