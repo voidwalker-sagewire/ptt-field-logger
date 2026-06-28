@@ -515,7 +515,7 @@ async function askHazel(text) {
 
     logRaw("HAZEL: " + (payload.answer || ""));
     logRaw("HAZEL AUDIO URL: " + (payload.audioUrl || "EMPTY"));
-)
+
     if (payload.audioUrl) {
       logRaw("Preparing Hazel voice...");
 
