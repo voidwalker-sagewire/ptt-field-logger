@@ -80,9 +80,9 @@ button {
   margin-top: 12px;
 }
 
-#audioPlayer {
+audio {
   width: 100%;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .hint {
@@ -94,11 +94,15 @@ button {
   white-space: pre-wrap;
   font-family: monospace;
   font-size: 14px;
-  max-height: 300px;
+  max-height: 360px;
   overflow: auto;
 }
 
 .session {
   border-bottom: 1px solid #444;
   padding: 10px 0;
+}
+
+.session div {
+  margin-top: 8px;
 }
