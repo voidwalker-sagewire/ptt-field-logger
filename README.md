@@ -1,57 +1,73 @@
-# PTT Field Logger
+# PTT Field Logger v1.0
 
-A tiny browser/PWA prototype for testing the 3M Pro-Comms headset PTT button as a hands-free field voice logger.
+Gateway-centered rewrite of the PTT Field Logger.
 
-## Current status
+## Architecture
 
-Working proof chain:
+The browser is a thin client:
 
-```text
-3M Pro-Comms headset
-  -> BLE service FFE0
-  -> BLE characteristic FFE1
-  -> Chrome on Android
-  -> JavaScript web app
-  -> PTT session logs
-  -> local audio clips
+1. Connect headset
+2. Record audio
+3. Capture GPS
+4. Send one multipart request to `/api/field-session`
+5. Play the returned EmberVox reply
+
+The server orchestrates through SageWire Gateway:
+
+- STT: `https://api.sagewire.dev/stt/transcribe`
+- LOC: `https://api.sagewire.dev/loc/stamp`
+- TTS: `https://api.sagewire.dev/tts/speak`
+- WX: `https://weather.herdmate.ag`
+- LOG: Google Apps Script webhook
+
+## Required environment variables
+
+```txt
+OPENAI_API_KEY=...
+GATEWAY_BASE_URL=https://api.sagewire.dev
+WEATHER_BASE_URL=https://weather.herdmate.ag
+PUBLIC_BASE_URL=https://headset.herdmate.ag
+GOOGLE_SHEET_WEBHOOK_URL=...
+PORT=8787
 ```
 
-Known observed values:
+## Endpoints
 
-```text
-FFE1 = 01 -> PTT pressed
-FFE1 = 00 -> PTT released
+```txt
+GET  /health
+POST /api/field-session
+POST /api/transcribe   legacy alias
 ```
 
-## Version 0.2.3
+## Main request
 
-This version adds:
+`POST /api/field-session`
 
-- Connect to headset
-- Subscribe to FFE1 notifications
-- Detect PTT press/release
-- Start recording audio on PTT press
-- Stop recording audio on PTT release
-- Manual Start/Stop recording buttons
-- Mic Test / Wake Audio button
-- Big visible VU meter
-- Save session metadata to localStorage
-- Save audio clips locally in IndexedDB
-- Playback saved audio clips
-- Download individual audio clips
-- Export session logs as JSON metadata
-- Register service worker for PWA caching
+Multipart form fields:
 
-## Important note
+```txt
+audio     audio file
+metadata  JSON string
+```
 
-The JSON export does **not** include the audio file bytes. It exports session metadata only.
+## Google Apps Script Logger
 
-Audio clips stay inside the same browser/device storage until manually downloaded or cleared.
+The file `google-apps-script.gs` is included for the Google Sheet/Drive logger.
+
+It saves uploaded audio to Drive when `audioBase64` is provided, writes the Drive audio URL into the `PTT_Log` sheet, and records transcript, reply, GPS, weather, LOC, STT, and device metadata.
+
+Expected sheet tab:
+
+```txt
+PTT_Log
+```
+
+Expected Drive audio folder:
+
+```txt
+1ANLKiljvno8a4pwG-otgXd8U0gYfQMms
+```
 
 ## Notes
 
-This is not an official 3M product.
-
-This does not modify headset firmware.
-
-This is a user-controlled field logging experiment using hardware the user owns.
+Hazel naming has been removed from the frontend and main pipeline. Reply audio is stored as `embervox-*.wav`.
