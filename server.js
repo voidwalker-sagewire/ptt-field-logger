@@ -12,13 +12,18 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8787;
 
+const GATEWAY_BASE_URL = process.env.GATEWAY_BASE_URL || "https://api.sagewire.dev";
+const WEATHER_BASE_URL = process.env.WEATHER_BASE_URL || "https://weather.herdmate.ag";
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://headset.herdmate.ag";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const uploadsDir = path.join(__dirname, "uploads");
+const audioDir = path.join(__dirname, "audio");
 
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+for (const dir of [uploadsDir, audioDir]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
@@ -31,15 +36,360 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
-
-app.use("/audio", express.static(path.join(__dirname, "audio")));
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+app.use(cors());
+app.use(express.json({ limit: "2mb" }));
+app.use(express.static(__dirname));
+app.use("/audio", express.static(audioDir));
+
+function publicAudioUrl(fileName) {
+  return `${PUBLIC_BASE_URL}/audio/${encodeURIComponent(fileName)}`;
+}
+
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  const text = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error || `${url} HTTP ${response.status}`);
+  }
+
+  return payload;
+}
+
+async function callGatewayLoc(gps = {}, device = {}) {
+  if (!gps.latitude || !gps.longitude) {
+    return { status: "skipped", reason: "missing latitude/longitude", gps };
+  }
+
+  return postJson(`${GATEWAY_BASE_URL}/loc/stamp`, {
+    latitude: gps.latitude,
+    longitude: gps.longitude,
+    accuracy_m: gps.accuracy_m,
+    altitude_m: gps.altitude_m,
+    heading: gps.heading,
+    speed_mps: gps.speed_mps,
+    device_id: device.device_id || device.name || "unknown-device"
+  });
+}
+
+async function callWeather(gps = {}) {
+  if (!gps.latitude || !gps.longitude) {
+    return { status: "skipped", reason: "missing latitude/longitude" };
+  }
+
+  const url = `${WEATHER_BASE_URL}/weather?lat=${encodeURIComponent(gps.latitude)}&lng=${encodeURIComponent(gps.longitude)}`;
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.error || `Weather HTTP ${response.status}`);
+  }
+
+  return payload;
+}
+
+async function callGatewayStt(audioPath, originalName, mimeType) {
+  const form = new FormData();
+  const buffer = fs.readFileSync(audioPath);
+  const blob = new Blob([buffer], { type: mimeType || "application/octet-stream" });
+
+  form.append("audio", blob, originalName || "audio.webm");
+
+  const response = await fetch(`${GATEWAY_BASE_URL}/stt/transcribe`, {
+    method: "POST",
+    body: form
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.error || `STT HTTP ${response.status}`);
+  }
+
+  return payload;
+}
+
+async function callGatewayTts(text) {
+  const response = await fetch(`${GATEWAY_BASE_URL}/tts/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(errorText || `TTS HTTP ${response.status}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function askFieldAssistant(transcript, context) {
+  if (!transcript || !transcript.trim()) {
+    return "No speech detected.";
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a calm, practical field assistant for a push-to-talk headset. Reply briefly and naturally. Acknowledge the field note. If there are obvious action items, mention them. Keep the response short enough to hear through a headset."
+      },
+      {
+        role: "user",
+        content: JSON.stringify({ transcript, context })
+      }
+    ]
+  });
+
+  return completion.choices?.[0]?.message?.content || "Copy that.";
+}
+
+async function logToSheet(record) {
+  if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
+    return { ok: false, skipped: true, reason: "Missing GOOGLE_SHEET_WEBHOOK_URL" };
+  }
+
+  const response = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record)
+  });
+
+  const text = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error || `Sheet HTTP ${response.status}`);
+  }
+
+  return payload;
+}
+
+
+function makeFlatSheetRecord({
+  sessionId,
+  metadata,
+  transcript,
+  answer,
+  inputAudioUrl,
+  replyAudioUrl,
+  gps,
+  location,
+  weather,
+  stt,
+  savedAudioPath,
+  savedAudioName,
+  audioMimeType
+}) {
+  const session = metadata.session || {};
+  const device = metadata.device || {};
+
+  let audioBase64 = "";
+  try {
+    if (savedAudioPath && fs.existsSync(savedAudioPath)) {
+      audioBase64 = fs.readFileSync(savedAudioPath).toString("base64");
+    }
+  } catch (err) {
+    console.error("AUDIO BASE64 ERROR:", err.message);
+  }
+
+  return {
+    id: sessionId,
+    startedAt: session.startedAt || "",
+    endedAt: session.endedAt || "",
+    durationMs: session.durationMs || "",
+    endReason: session.endReason || "",
+
+    latitude: gps.latitude || "",
+    longitude: gps.longitude || "",
+    gpsAccuracy: gps.accuracy_m || "",
+    gpsTimestamp: gps.gps_timestamp || "",
+    gpsError: gps.gps_error || "",
+
+    weatherTemp: weather.temp || weather.temperature || "",
+    weatherCondition: weather.condition || weather.description || "",
+    weatherWind: weather.wind || "",
+    weatherHumidity: weather.humidity || "",
+
+    transcript,
+    summary: answer || "",
+    reply: answer || "",
+
+    audioName: savedAudioName || "",
+    audioUrl: inputAudioUrl || "",
+    replyAudioUrl: replyAudioUrl || "",
+    transcriptStatus: transcript ? "complete" : "empty",
+    source: "PTT Field Logger v1.0",
+
+    locationJson: JSON.stringify(location || {}),
+    weatherJson: JSON.stringify(weather || {}),
+    sttJson: JSON.stringify(stt || {}),
+    deviceJson: JSON.stringify(device || {}),
+
+    audioBase64,
+    audioMimeType: audioMimeType || "audio/webm"
+  };
+}
+
+async function handleFieldSession(req, res, legacyMode = false) {
+  let uploadedPath = req.file?.path;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: "No audio file uploaded" });
+    }
+
+    let metadata = {};
+    try {
+      metadata = JSON.parse(req.body.metadata || "{}");
+    } catch {
+      metadata = {};
+    }
+
+    if (legacyMode && !metadata.session) {
+      metadata.session = {
+        id: path.parse(req.file.originalname || `ptt-${Date.now()}`).name
+      };
+      metadata.device = { source: "legacy-client" };
+      metadata.gps = {};
+    }
+
+    const sessionId = metadata.session?.id || `ptt-${Date.now()}`;
+    const safeBase = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+    const originalExt = path.extname(req.file.originalname || "") || ".webm";
+    const savedAudioName = `${safeBase}${originalExt}`;
+    const savedAudioPath = path.join(audioDir, savedAudioName);
+
+    fs.copyFileSync(uploadedPath, savedAudioPath);
+    const inputAudioUrl = publicAudioUrl(savedAudioName);
+
+    const gps = metadata.gps || {};
+    const device = metadata.device || {};
+
+    const [locationResult, weatherResult, sttResult] = await Promise.allSettled([
+      callGatewayLoc(gps, device),
+      callWeather(gps),
+      callGatewayStt(uploadedPath, req.file.originalname, req.file.mimetype)
+    ]);
+
+    const location = locationResult.status === "fulfilled"
+      ? locationResult.value
+      : { status: "failed", error: locationResult.reason.message };
+
+    const weather = weatherResult.status === "fulfilled"
+      ? weatherResult.value
+      : { status: "failed", error: weatherResult.reason.message };
+
+    if (sttResult.status === "rejected") {
+      throw new Error(`STT failed: ${sttResult.reason.message}`);
+    }
+
+    const transcript = (sttResult.value.text || "").trim();
+    const stt = sttResult.value;
+
+    const context = {
+      session: metadata.session || {},
+      device,
+      gps,
+      location,
+      weather
+    };
+
+    const answer = await askFieldAssistant(transcript, context);
+
+    let replyAudioUrl = "";
+    try {
+      const replyBuffer = await callGatewayTts(answer);
+      const replyFileName = `embervox-${Date.now()}.wav`;
+      fs.writeFileSync(path.join(audioDir, replyFileName), replyBuffer);
+      replyAudioUrl = publicAudioUrl(replyFileName);
+    } catch (err) {
+      console.error("EMBERVOX TTS ERROR:", err.message);
+    }
+
+    const record = {
+      ok: true,
+      source: "PTT Field Logger",
+      version: "1.0.0",
+      sessionId,
+      createdAt: new Date().toISOString(),
+      inputAudioUrl,
+      transcript,
+      stt,
+      answer,
+      replyAudioUrl,
+      gps,
+      location,
+      weather,
+      device,
+      session: metadata.session || {}
+    };
+
+    const sheetRecord = makeFlatSheetRecord({
+      sessionId,
+      metadata,
+      transcript,
+      answer,
+      inputAudioUrl,
+      replyAudioUrl,
+      gps,
+      location,
+      weather,
+      stt,
+      savedAudioPath,
+      savedAudioName,
+      audioMimeType: req.file.mimetype
+    });
+
+    let sheet = null;
+    try {
+      sheet = await logToSheet(sheetRecord);
+      if (sheet?.audioUrl) {
+        record.driveAudioUrl = sheet.audioUrl;
+      }
+    } catch (err) {
+      sheet = { ok: false, error: err.message };
+      console.error("GOOGLE SHEET LOG ERROR:", err.message);
+    }
+
+    return res.json({ ...record, sheet });
+
+  } catch (err) {
+    console.error("FIELD SESSION ERROR:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+
+  } finally {
+    if (uploadedPath) fs.unlink(uploadedPath, () => {});
+  }
+}
 
 /* ---------------- HEALTH ---------------- */
 
@@ -47,209 +397,26 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "PTT Field Logger",
-    service: "headset-bridge"
+    service: "ptt-field-logger",
+    version: "1.0.0",
+    gateway: GATEWAY_BASE_URL
   });
 });
 
-/* ---------------- TRANSCRIBE ---------------- */
+/* ---------------- FIELD SESSION ORCHESTRATION ---------------- */
 
+app.post("/api/field-session", upload.single("audio"), async (req, res) => {
+  return handleFieldSession(req, res, false);
+});
+
+/* Backward-compatible endpoint for old test clients. */
 app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: "No audio file uploaded" });
-    }
-
-    /* ---------------- OPENAI TRANSCRIBE ---------------- */
-
-    const result = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
-      model: "gpt-4o-mini-transcribe"
-    });
-
-    const transcriptText = result.text || "";
-
-    /* ---------------- SUMMARY ---------------- */
-
-    let summary = "";
-
-    if (transcriptText.trim()) {
-      const summaryResult = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Summarize field notes briefly. List action items if present. If test recording, say so."
-          },
-          {
-            role: "user",
-            content: transcriptText
-          }
-        ]
-      });
-
-      summary = summaryResult.choices?.[0]?.message?.content || "";
-    }
-
-    /* ---------------- SERVER AUDIO STORAGE ---------------- */
-
-    let audioUrl = "";
-
-    try {
-      const audioDir = path.join(__dirname, "audio");
-
-      if (!fs.existsSync(audioDir)) {
-        fs.mkdirSync(audioDir, { recursive: true });
-      }
-
-      const safeName = (req.file.originalname || "audio.webm").replace(/[^a-zA-Z0-9._-]/g, "_");
-      const finalPath = path.join(audioDir, safeName);
-
-      fs.copyFileSync(req.file.path, finalPath);
-
-      audioUrl = `https://headset.herdmate.ag/audio/${encodeURIComponent(safeName)}`;
-
-    } catch (err) {
-      console.error("AUDIO STORAGE ERROR:", err.message);
-    }
-
-    /* ---------------- CLEANUP ---------------- */
-
-    fs.unlink(req.file.path, () => {});
-
-    /* ---------------- RESPONSE ---------------- */
-  
-    return res.json({
-      ok: true,
-      text: transcriptText,
-      summary,
-      audioUrl
-    });
-
-  } catch (err) {
-    console.error("TRANSCRIBE ERROR:", err);
-
-    if (req.file?.path) {
-      fs.unlink(req.file.path, () => {});
-    }
-
-    return res.status(500).json({
-      ok: false,
-      error: err.message
-    });
-  }
-});
-
-app.post("/api/hazel", async (req, res) => {
-  try {
-    const text = req.body.text || "";
-    let answer = "Copy that.";
-
-if (text.trim()) {
-  const hazelResult = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are Hazel, a calm field assistant for a headset app. Reply briefly, naturally, and usefully. If the user is logging a field note, acknowledge it and identify any obvious action items. Keep replies short enough to hear through a headset."
-      },
-      {
-        role: "user",
-        content: text
-      }
-    ]
-  });
-
-  answer = hazelResult.choices?.[0]?.message?.content || "Copy that.";
-}
-
-    let audioUrl = "";
-
-    try {
-      const ttsResponse = await fetch("http://138.197.120.229:5000/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ text: answer })
-      });
-
-      if (!ttsResponse.ok) {
-        throw new Error(`Piper HTTP ${ttsResponse.status}`);
-      }
-
-      const audioDir = path.join(__dirname, "audio");
-      if (!fs.existsSync(audioDir)) {
-        fs.mkdirSync(audioDir, { recursive: true });
-      }
-
-      const fileName = `hazel-${Date.now()}.wav`;
-      const finalPath = path.join(audioDir, fileName);
-
-      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
-      fs.writeFileSync(finalPath, buffer);
-
-      audioUrl = `https://headset.herdmate.ag/audio/${fileName}`;
-    } catch (ttsErr) {
-      console.error("HAZEL TTS ERROR:", ttsErr.message);
-    }
-
-    console.log("HAZEL ANSWER:", answer);
-    console.log("HAZEL AUDIO URL:", audioUrl || "EMPTY");
-
-    return res.json({
-      ok: true,
-      answer,
-      audioUrl
-    });
-  } catch (err) {
-    console.error("HAZEL ERROR:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err.message
-    });
-  }
-});
-
-/* ---------------- LOG TO SHEET (NO AUDIO HERE) ---------------- */
-
-app.post("/api/log-session", async (req, res) => {
-  try {
-    if (!process.env.GOOGLE_SHEET_WEBHOOK_URL) {
-      return res.status(500).json({ ok: false, error: "Missing webhook URL" });
-    }
-
-    const response = await fetch(process.env.GOOGLE_SHEET_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body)
-    });
-
-    const text = await response.text();
-
-    let payload;
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = { ok: false, error: text };
-    }
-
-    return res.json({
-      ok: true,
-      sheet: payload
-    });
-
-  } catch (err) {
-    return res.status(500).json({
-      ok: false,
-      error: err.message
-    });
-  }
+  return handleFieldSession(req, res, true);
 });
 
 /* ---------------- START ---------------- */
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`PTT Field Logger running on port ${PORT}`);
+  console.log(`PTT Field Logger v1.0 running on port ${PORT}`);
+  console.log(`Gateway: ${GATEWAY_BASE_URL}`);
 });
