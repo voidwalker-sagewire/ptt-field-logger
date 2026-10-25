@@ -15,8 +15,9 @@ STATUS: Integration branch. Backend code is prepared; native MAX-8 watch firmwar
 - Multipart field audio: RIFF/WAV PCM, signed 16-bit, 16kHz or 24kHz, 1 or 2 channels, 10 seconds maximum, 1MiB maximum.
 - Returns raw Piper WAV, plus URI-encoded X-Max8-Transcript and X-Max8-Reply headers; Cache-Control: no-store.
 - 401 for failed authorization, 400 for invalid PCM, 422 for no speech, 502 for gateway/TTS/AI faults.
+- Optional multipart text field history: JSON array of up to the six latest {role: user|assistant, content: string} turns. History is validated and truncated, so the device holds its own short conversation context without a server-side conversation database.
 - In this route audio is processed in memory, not stored locally or sent to ranch logger/Google Sheets. The upstream STT, AI and TTS processors still receive user audio/text.
-- Currently single-turn: conversational history support and watch client integration remain open.
+- Stateless multi-turn protocol is prepared; the native watch must still implement history exchange. Watch firmware integration remains open.
 
 ## Watch integration design (pending)
 1. Port the retained MAX-8 steady character, battery, voice animation and TALK/MUTE/MENU to the native factory SDK.
