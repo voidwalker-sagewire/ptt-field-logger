@@ -431,11 +431,12 @@ async function max8Transcribe(wavBytes) {
   if (!response.ok) throw new Error("STT upstream HTTP " + response.status);
   return response.json();
 }
-async function max8Answer(transcript) {
+async function max8Answer(transcript, history = []) {
   const result = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
     messages: [
       { role: "system", content: "You are MAX-8, an original witty and slightly sarcastic miniature television personality. Be warm, fun and conversational, not an imitation of an existing character. Keep voice replies to 1-2 short sentences. Never claim to have performed actions you haven't done." },
+      ...history,
       { role: "user", content: transcript }
     ],
     max_tokens: 120
