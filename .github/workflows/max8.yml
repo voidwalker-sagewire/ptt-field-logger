@@ -1,4 +1,4 @@
-name: MAX-8 voice and factory baseline
+name: MAX-8 native integrated firmware build
 on:
   pull_request:
     paths:
@@ -25,9 +25,8 @@ jobs:
       - run: node --check server.js
       - run: node --test max8/max8-turn.test.mjs
 
-  waveshare-native-audio-baseline:
-    # Reproducibility check only: does NOT overwrite our watch, install
-    # vendor firmware, or claim that MAX-8 UI has been integrated.
+  max8-native-integrated:
+    # Build an integrated test firmware without ever flashing a physical watch.
     runs-on: ubuntu-latest
     container:
       image: espressif/idf:v5.5.5
@@ -39,9 +38,22 @@ jobs:
           git clone https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-2.06.git /tmp/waveshare
           cd /tmp/waveshare
           git checkout 30f3b23b3d4bb38d32f7d0cddffb66759668a855
-      - name: Compile native ES7210 recorder and MusicPlayer baseline
+      - name: Insert MAX-8 native conversation app into pinned factory code
+        shell: bash
+        run: python max8/native/apply_factory.py /tmp/waveshare/examples/factory max8/native
+      - name: Compile integrated MAX-8, native Recorder and MusicPlayer
         shell: bash
         run: |
           . /opt/esp/idf/export.sh
           idf.py -C /tmp/waveshare/examples/factory set-target esp32s3
           idf.py -C /tmp/waveshare/examples/factory build
+      - name: Save integrated firmware binaries for review only
+        uses: actions/upload-artifact@v4
+        with:
+          name: max8-native-firmware-unvalidated-hardware
+          path: |
+            /tmp/waveshare/examples/factory/build/bootloader/bootloader.bin
+            /tmp/waveshare/examples/factory/build/partition_table/partition-table.bin
+            /tmp/waveshare/examples/factory/build/*.bin
+          if-no-files-found: error
+          retention-days: 7
