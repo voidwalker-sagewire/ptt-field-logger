@@ -21,6 +21,11 @@ private:
  static Max8 *instance_;
  static void talkButton(lv_event_t *ev);
  static void musicButton(lv_event_t *ev);
+ static void setupButton(lv_event_t *ev);
+ static void setupAction(lv_event_t *ev);
+ static void setupFocus(lv_event_t *ev);
+ void showSetup();
+ void hideSetup();
  static void refreshUi(lv_timer_t *timer);
  static void voiceTask(void *arg);
  void updateStatus(const char *s);
@@ -32,6 +37,12 @@ private:
  lv_obj_t *mouth_ = nullptr;
  lv_obj_t *battery_ = nullptr;
  lv_obj_t *talk_ = nullptr;
+ lv_obj_t *setup_ = nullptr;
+ lv_obj_t *endpoint_ = nullptr;
+ lv_obj_t *token_ = nullptr;
+ lv_obj_t *keyboard_ = nullptr;
+ lv_obj_t *setupMessage_ = nullptr;
+ bool clearArmed_ = false;
  lv_timer_t *timer_ = nullptr;
  std::atomic<bool> busy_{false};
  std::atomic<bool> closing_{false};

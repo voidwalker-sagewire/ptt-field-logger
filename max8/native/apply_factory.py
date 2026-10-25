@@ -8,7 +8,7 @@ factory = Path(sys.argv[1]).resolve()
 ours = Path(sys.argv[2]).resolve()
 target = factory / "components" / "Max8"
 target.mkdir(parents=True, exist_ok=True)
-for filename in ("Max8.hpp", "Max8.cpp", "CMakeLists.txt"):
+for filename in ("Max8.hpp", "Max8.cpp", "Max8Config.hpp", "Max8Config.cpp", "CMakeLists.txt"):
     shutil.copyfile(ours / filename, target / filename)
 
 def replace(path, old, new):
