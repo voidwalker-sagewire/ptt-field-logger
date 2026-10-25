@@ -97,7 +97,8 @@ bool sendAll(esp_http_client_handle_t c,const uint8_t *data,size_t length){
   size_t off=0;
   while(off<length){
     int n=esp_http_client_write(c,(const char*)data+off,(int)std::min<size_t>(length-off,4096));
-    if(n<=0)return false;off+=(size_t)n;
+    if(n<=0) return false;
+    off += (size_t)n;
   }
   return true;
 }
