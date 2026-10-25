@@ -42,6 +42,17 @@ export function authorized(header, configuredToken) {
     timingSafeEqual(actual, expected);
 }
 
+export function safeHistory(raw) {
+  let entries;
+  try { entries = typeof raw === "string" ? JSON.parse(raw) : raw; }
+  catch { return []; }
+  if (!Array.isArray(entries)) return [];
+  return entries.slice(-6)
+    .filter(e => e && (e.role === "user" || e.role === "assistant") && typeof e.content === "string")
+    .map(e => ({ role: e.role, content: e.content.trim().slice(0, 320) }))
+    .filter(e => e.content);
+}
+
 export function createMax8TurnHandler({ token, transcribe, answer, speak }) {
   return async function max8Turn(req, res) {
     if (!token) return res.status(503).json({ error: "MAX8_NOT_CONFIGURED" });
@@ -55,7 +66,7 @@ export function createMax8TurnHandler({ token, transcribe, answer, speak }) {
       const recognized = await transcribe(req.file.buffer);
       const transcript = String(recognized?.text || "").trim().slice(0, 800);
       if (!transcript) return res.status(422).json({ error: "NO_SPEECH_DETECTED" });
-      const response = String(await answer(transcript)).trim().slice(0, 320);
+      const response = String(await answer(transcript, safeHistory(req.body?.history))).trim().slice(0, 320);
       if (!response) return res.status(502).json({ error: "AI_EMPTY_RESPONSE" });
       const audio = await speak(response);
       if (!Buffer.isBuffer(audio) || audio.length < 44 ||
