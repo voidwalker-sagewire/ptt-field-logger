@@ -1,0 +1,38 @@
+name: MAX-8 public service reachability (read only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/max8-service-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Probe existing SageWire public GET health endpoints
+        shell: bash
+        run: |
+          failures=0
+          for endpoint in \
+            https://api.sagewire.dev/health \
+            https://api.sagewire.dev/services \
+            https://tts.sagewire.dev/health \
+            https://stt.sagewire.dev/health \
+            https://headset.herdmate.ag/health
+          do
+            printf 'Checking %s\n' "$endpoint"
+            result=$(curl --silent --show-error --max-time 12 --output /tmp/max8-health --write-out '%{http_code} %{remote_ip}' "$endpoint" 2>&1) || {
+              printf '  Transport failure: %s\n' "$result"
+              failures=$((failures+1))
+              continue
+            }
+            printf '  HTTP %s\n' "${result%% *}"
+            case "$result" in
+              200\ *) ;;
+              *) failures=$((failures+1)) ;;
+            esac
+          done
+          echo "Health endpoint failures: $failures"
+          if [ "$failures" -gt 0 ]; then exit 1; fi
