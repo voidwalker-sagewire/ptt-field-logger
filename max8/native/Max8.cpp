@@ -1,4 +1,5 @@
 #include "Max8.hpp"
+#include "Max8Config.hpp"
 #include "bsp/esp-bsp.h"
 #include "bsp_board_extra.h"
 #include "esp_http_client.h"
@@ -83,15 +84,10 @@ bool parseWav(const uint8_t *src,size_t n,WavInfo &w){
   return fmt && w.pcm && w.bytes && (w.bytes%(w.channels*2)==0);
 }
 bool readConfig(std::string &url,std::string &token) {
-  nvs_handle_t handle;
-  if(nvs_open("max8",NVS_READONLY,&handle)!=ESP_OK)return false;
-  char u[192]={0},t[192]={0};size_t ulen=sizeof(u),tlen=sizeof(t);
-  bool okay=nvs_get_str(handle,"endpoint",u,&ulen)==ESP_OK
-           && nvs_get_str(handle,"token",t,&tlen)==ESP_OK;
-  nvs_close(handle);
-  url=u;token=t;
-  // Only explicit HTTPS endpoints; no URL/client secret baked into source.
-  return okay && url.rfind("https://",0)==0 && token.size()>=16;
+  max8::Config config;
+  if(!max8::loadConfig(config))return false;
+  url=config.endpoint;token=config.token;
+  return true;
 }
 bool sendAll(esp_http_client_handle_t c,const uint8_t *data,size_t length){
   size_t off=0;
@@ -112,7 +108,8 @@ bool cloudTurn(const uint8_t *wav,size_t wavLength,uint8_t *out,size_t &used) {
   std::string post=std::string("\r\n--")+boundary+"--\r\n";
   esp_http_client_config_t config={};
   config.url=url.c_str();config.crt_bundle_attach=esp_crt_bundle_attach;
-  config.timeout_ms=20000;config.buffer_size=4096;config.buffer_size_tx=4096;
+  config.timeout_ms=90000;config.buffer_size=4096;config.buffer_size_tx=4096;
+  config.disable_auto_redirect=true; // never forward the device token to another host
   esp_http_client_handle_t c=esp_http_client_init(&config);
   if(!c){phase.store(HttpError);return false;}
   esp_http_client_set_method(c,HTTP_METHOD_POST);
@@ -161,6 +158,7 @@ bool Max8::close(){
   releaseUi();return true;
 }
 void Max8::releaseUi(){
+  hideSetup();
   if(timer_){lv_timer_del(timer_);timer_=nullptr;}
   status_=mouth_=talk_=battery_=nullptr;
 }
@@ -197,11 +195,108 @@ void Max8::makeUi(){
   status_=txt(root,"READY - PRESS TALK",42,413,326,0xFFD766);
   talk_=button(root,"TALK",24,461,111,38,0x03E6ED,&Max8::talkButton,this);
   button(root,"MUSIC",147,461,114,38,0xEF36BC,&Max8::musicButton,this);
-  button(root,"BACK",273,461,110,38,0xBDD8E8,&Max8::musicButton,this);
+  button(root,"SETUP",273,461,110,38,0xBDD8E8,&Max8::setupButton,this);
   battery_=txt(root,"MAX-8 NATIVE",155,438,100,0xA9B2D0);
   timer_=lv_timer_create(&Max8::refreshUi,90,this);
 }
-bool Max8::run(){releaseUi();closing_.store(false);makeUi();return true;}
+bool Max8::run(){
+  releaseUi();closing_.store(false);
+  max8::Config config;
+  phase.store(max8::loadConfig(config)?Idle:SetupNeeded);
+  makeUi();return true;
+}
+void Max8::hideSetup(){
+  if(token_)lv_textarea_set_text(token_,"");
+  if(setup_)lv_obj_delete(setup_);
+  setup_=endpoint_=token_=keyboard_=setupMessage_=nullptr;
+  clearArmed_=false;
+}
+void Max8::setupButton(lv_event_t *ev){
+  auto *self=(Max8*)lv_event_get_user_data(ev);
+  if(self && !self->busy_.load())self->showSetup();
+}
+void Max8::setupFocus(lv_event_t *ev){
+  auto *self=(Max8*)lv_event_get_user_data(ev);
+  if(self && self->keyboard_) {
+    self->clearArmed_=false;
+    lv_keyboard_set_textarea(self->keyboard_,(lv_obj_t*)lv_event_get_target(ev));
+  }
+}
+void Max8::showSetup(){
+  if(setup_ || busy_.load())return;
+  setup_=lv_obj_create(lv_screen_active());
+  lv_obj_set_pos(setup_,0,0);lv_obj_set_size(setup_,410,502);
+  lv_obj_set_style_pad_all(setup_,0,0);
+  lv_obj_set_style_bg_color(setup_,lv_color_hex(0x10172B),0);
+  lv_obj_remove_flag(setup_,LV_OBJ_FLAG_SCROLLABLE);
+  txt(setup_,"MAX-8 SETUP",25,8,360,0x03E6ED);
+  setupMessage_=txt(setup_,"Wi-Fi: launcher > Settings > WLAN",15,34,380,0xFFD766);
+  endpoint_=lv_textarea_create(setup_);
+  lv_obj_set_pos(endpoint_,15,62);lv_obj_set_size(endpoint_,380,48);
+  lv_textarea_set_one_line(endpoint_,true);
+  lv_textarea_set_max_length(endpoint_,191);
+  lv_textarea_set_placeholder_text(endpoint_,"HTTPS URL ending /api/max8/turn");
+  token_=lv_textarea_create(setup_);
+  lv_obj_set_pos(token_,15,118);lv_obj_set_size(token_,380,48);
+  lv_textarea_set_one_line(token_,true);
+  lv_textarea_set_max_length(token_,128);
+  lv_textarea_set_password_mode(token_,true);
+  lv_textarea_set_password_show_time(token_,0);
+  max8::Config config;
+  const bool saved=max8::loadConfig(config);
+  if(saved)lv_textarea_set_text(endpoint_,config.endpoint.c_str());
+  lv_textarea_set_placeholder_text(token_,saved?"Token: blank keeps saved value":"Device token (32-128 characters)");
+  lv_obj_add_event_cb(endpoint_,&Max8::setupFocus,LV_EVENT_FOCUSED,this);
+  lv_obj_add_event_cb(token_,&Max8::setupFocus,LV_EVENT_FOCUSED,this);
+  button(setup_,"SAVE",15,178,118,42,0x03E6ED,&Max8::setupAction,this);
+  button(setup_,"CLEAR",146,178,118,42,0xEF36BC,&Max8::setupAction,this);
+  button(setup_,"CLOSE",277,178,118,42,0xBDD8E8,&Max8::setupAction,this);
+  txt(setup_,"Saved locally. Save does not test voice.",15,228,380,0xA9B2D0);
+  keyboard_=lv_keyboard_create(setup_);
+  lv_obj_set_size(keyboard_,410,240);lv_obj_align(keyboard_,LV_ALIGN_BOTTOM_MID,0,0);
+  lv_keyboard_set_mode(keyboard_,LV_KEYBOARD_MODE_TEXT_LOWER);
+  lv_keyboard_set_textarea(keyboard_,endpoint_);
+}
+void Max8::setupAction(lv_event_t *ev){
+  auto *self=(Max8*)lv_event_get_user_data(ev);
+  if(!self || self->busy_.load() || !self->setup_)return;
+  auto *b=(lv_obj_t*)lv_event_get_target(ev);
+  const char *action=lv_label_get_text(lv_obj_get_child(b,0));
+  if(!strcmp(action,"CLOSE")){self->hideSetup();return;}
+  if(!strcmp(action,"CLEAR")){
+    if(!self->clearArmed_){
+      self->clearArmed_=true;
+      lv_label_set_text(self->setupMessage_,"Press CLEAR again to forget MAX-8 setup");return;
+    }
+    self->clearArmed_=false;
+    if(max8::clearConfig()){
+      lv_textarea_set_text(self->endpoint_,"");lv_textarea_set_text(self->token_,"");
+      lv_textarea_set_placeholder_text(self->token_,"Device token (32-128 characters)");
+      phase.store(SetupNeeded);
+      lv_label_set_text(self->setupMessage_,"MAX-8 cleared. Wi-Fi unchanged.");
+    }else lv_label_set_text(self->setupMessage_,"Could not clear setup. Try again.");
+    return;
+  }
+  self->clearArmed_=false;
+  max8::Config config;
+  max8::loadConfig(config);
+  config.endpoint=lv_textarea_get_text(self->endpoint_);
+  const char *newToken=lv_textarea_get_text(self->token_);
+  if(*newToken)config.token=newToken;
+  if(!max8::validEndpoint(config.endpoint)){
+    lv_label_set_text(self->setupMessage_,"Use https://host/api/max8/turn (port 443)");return;
+  }
+  if(!max8::validToken(config.token)){
+    lv_label_set_text(self->setupMessage_,"Token: 32-128 letters, digits, - or _");return;
+  }
+  if(!max8::saveConfig(config)){
+    lv_label_set_text(self->setupMessage_,"Save failed. Setup is not confirmed.");return;
+  }
+  lv_textarea_set_text(self->token_,"");
+  lv_textarea_set_placeholder_text(self->token_,"Token: blank keeps saved value");
+  phase.store(Idle);
+  lv_label_set_text(self->setupMessage_,"Saved locally. Voice is not yet verified.");
+}
 void Max8::talkButton(lv_event_t *ev){
   auto *self=(Max8*)lv_event_get_user_data(ev);
   if(!self || self->busy_.exchange(true))return;
@@ -224,7 +319,7 @@ void Max8::refreshUi(lv_timer_t *timer){
     case Speaking:msg="TRANSMITTING RESPONSE";break;
     case Failed:msg="AUDIO TASK FAILED";break;
     case Done:msg="READY FOR NEXT QUESTION";break;
-    case SetupNeeded:msg="SAGEWIRE PAIRING NEEDED";break;
+    case SetupNeeded:msg="OPEN SETUP TO CONFIGURE MAX-8";break;
     case NoWifi:msg="CONNECT WIFI IN SETTINGS";break;
     case BusyAudio:msg="SPEAKER / MUSIC IS BUSY";break;
     case CaptureError:msg="MIC CAPTURE FAILED";break;
@@ -241,6 +336,13 @@ void Max8::voiceTask(void *arg) {
   vTaskDelete(nullptr);
 }
 void Max8::doConversation(){
+  // Fail before microphone capture, allocation or codec acquisition.
+  {
+    max8::Config config;
+    if(!max8::loadConfig(config)){phase.store(SetupNeeded);return;}
+    wifi_ap_record_t ap={};
+    if(esp_wifi_sta_get_ap_info(&ap)!=ESP_OK){phase.store(NoWifi);return;}
+  }
   // Never start capture while factory MusicPlayer or Recorder owns shared codec.
   if(bsp_extra_audio_session_acquire(BSP_EXTRA_AUDIO_OWNER_MAX8)!=ESP_OK){
     phase.store(BusyAudio);return;

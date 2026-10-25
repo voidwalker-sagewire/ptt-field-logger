@@ -1,6 +1,6 @@
 # MAX-8: conversational watch + music
 
-STATUS: Integration branch. Backend code is prepared; native MAX-8 watch firmware is NOT built or ready to flash. The deployed services and current watch firmware are unchanged.
+STATUS: The prior integrated native firmware compiled with ESP-IDF v5.5.5. This branch adds local configuration and bounded gateway handling; its exact CI result must be checked separately. Hardware validation, rollback and a deployed MAX-8 conversation route are still release gates. Do not merge or flash yet. See [configuration and commissioning](COMMISSIONING.md).
 
 ## Verified foundations
 - Board: Waveshare ESP32-S3 Touch AMOLED 2.06 (410x502), ES8311 speaker output, ES7210 microphones.

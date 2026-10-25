@@ -23,7 +23,12 @@ jobs:
         with:
           node-version: '22'
       - run: node --check server.js
-      - run: node --test max8/max8-turn.test.mjs
+      - run: npm ci --ignore-scripts
+      - run: node --test max8/*.test.mjs
+      - name: Test native configuration policy and storage errors on host
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Imax8/tests -Imax8/native max8/native/Max8Config.cpp max8/tests/config_test.cpp -o /tmp/max8-config-test
+          /tmp/max8-config-test
 
   max8-native-integrated:
     # Build an integrated test firmware without ever flashing a physical watch.
