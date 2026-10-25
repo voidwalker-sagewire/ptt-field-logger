@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import OpenAI from "openai";
+import { authorized, createMax8TurnHandler } from "./max8/max8-turn.mjs";
 
 dotenv.config();
 
@@ -413,6 +414,53 @@ app.post("/api/field-session", upload.single("audio"), async (req, res) => {
 app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   return handleFieldSession(req, res, true);
 });
+
+
+// MAX-8 watch conversation: dedicated no-retention route. It does not invoke
+// the PTT location logger, Google Sheets, or save microphone recordings.
+const max8MemoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1048576, files: 1 }
+});
+async function max8Transcribe(wavBytes) {
+  const form = new FormData();
+  form.append("audio", new Blob([wavBytes], { type: "audio/wav" }), "max8.wav");
+  const response = await fetch(GATEWAY_BASE_URL + "/stt/transcribe", {
+    method: "POST", body: form, signal: AbortSignal.timeout(30000)
+  });
+  if (!response.ok) throw new Error("STT upstream HTTP " + response.status);
+  return response.json();
+}
+async function max8Answer(transcript, history = []) {
+  const result = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    messages: [
+      { role: "system", content: "You are MAX-8, an original witty and slightly sarcastic miniature television personality. Be warm, fun and conversational, not an imitation of an existing character. Keep voice replies to 1-2 short sentences. Never claim to have performed actions you haven't done." },
+      ...history,
+      { role: "user", content: transcript }
+    ],
+    max_tokens: 120
+  });
+  return result.choices?.[0]?.message?.content || "";
+}
+async function max8Speak(text) {
+  return callGatewayTts(text);
+}
+const max8Turn = createMax8TurnHandler({
+  token: process.env.MAX8_DEVICE_TOKEN,
+  transcribe: max8Transcribe,
+  answer: max8Answer,
+  speak: max8Speak
+});
+app.post("/api/max8/turn", (req, res, next) => {
+  if (!process.env.MAX8_DEVICE_TOKEN) {
+    return res.status(503).json({ error: "MAX8_NOT_CONFIGURED" });
+  }
+  if (!authorized(req.get("authorization"), process.env.MAX8_DEVICE_TOKEN)) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
+  next();
+}, max8MemoryUpload.single("audio"), max8Turn);
 
 /* ---------------- START ---------------- */
 
