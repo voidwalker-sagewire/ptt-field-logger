@@ -7,6 +7,10 @@ on:
       - '.github/workflows/max8.yml'
   workflow_dispatch:
 
+concurrency:
+  group: max8-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
