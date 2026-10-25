@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { authorized, validPcmWav, createMax8TurnHandler } from "./max8-turn.mjs";
+import { authorized, validPcmWav, safeHistory, createMax8TurnHandler } from "./max8-turn.mjs";
 
 function wav(rate=24000, channels=1, seconds=1) {
   const bytes = rate * channels * 2 * seconds;
@@ -90,4 +90,27 @@ test("invalid TTS response gives honest upstream error",async()=>{
   const res=mockRes();await h(req(wav()),res);
   assert.equal(res.statusCode,502);
   assert.equal(res.body.error,"TTS_INVALID_WAV");
+});
+
+test("only six bounded user/assistant history entries are accepted",()=>{
+  const raw=JSON.stringify(Array.from({length:10},(_,i)=>({role:i===0?"system":i%2?"assistant":"user",content:"a".repeat(400)})));
+  const entries=safeHistory(raw);
+  assert.equal(entries.length,6);
+  assert.ok(entries.every(x=>x.content.length===320 && ["user","assistant"].includes(x.role)));
+  assert.deepEqual(safeHistory("{broken"),[]);
+});
+test("watch-held conversation context reaches answer stage without disk storage",async()=>{
+  let history=null;
+  const h=createMax8TurnHandler({token:"secret",
+    transcribe:async()=>({text:"What about tomorrow?"}),
+    answer:async(_text,h)=>{history=h;return"Tomorrow is a new day.";},
+    speak:async()=>wav()
+  });
+  const request=req(wav());
+  request.body={history:JSON.stringify([{role:"user",content:"What about today?"},{role:"assistant",content:"Today is Sunday."}])};
+  const res=mockRes();
+  await h(request,res);
+  assert.equal(res.statusCode,200);
+  assert.equal(history.length,2);
+  assert.equal(history[0].content,"What about today?");
 });
