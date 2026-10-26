@@ -29,3 +29,22 @@ installation directories are refused.
 Local validation before operator handoff: 19 Node tests and five Python tests
 passed. Python tests exercise the staging command construction with substituted
 Docker/network calls; only a server run can validate the real speech pipeline.
+
+## Operator-returned private result
+
+The operator ran the checksum-pinned private installer and returned a passing
+synthetic conversation: recognized text `Hello Max, say hello.`, a nonempty model
+reply, 100606 input bytes and 152340 reply bytes, in 14781 ms. This is real private
+server evidence supplied by the operator, with `hardwareVerified: false`.
+
+`publish-tested.py` is the separate next action. It checks that the private test,
+image, environment and source hashes match; starts a new restricted container;
+routes only `Host(headset.herdmate.ag)` plus exact path `/api/max8/turn`; and tests
+authentication and a full conversation through public HTTPS. Readiness is checked
+inside that container so the existing logger's `/health` is left in place. The
+existing public health response must match before and after. If verification
+fails after creating the service, only the newly owned MAX-8 container is removed.
+A successful service receives an `unless-stopped` restart policy. No other running
+container is stopped, changed or removed. There is no host port mapping on the
+public MAX-8 container. Source credentials and the dedicated watch token remain
+private. Ten Python tests cover private staging and publication/rollback behavior.
